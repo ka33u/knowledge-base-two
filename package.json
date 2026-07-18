@@ -1,0 +1,12 @@
+{
+  "name": "hd-motors-knowledge-base",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "HOST=0.0.0.0 node server.mjs",
+    "test": "node tests/api-smoke.mjs"
+  },
+  "engines": { "node": ">=25" }
+}

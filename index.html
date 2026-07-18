@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>电机设计知识库</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .content-area { max-width: 1680px; }
+      .document-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+      .compact-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+      .compact-grid .doc-card { min-height: 172px; padding: 15px; }
+      .compact-grid .doc-card h2 { font-size: 14px; margin: 12px 0 6px; }
+      .compact-grid .doc-card p { font-size: 11px; }
+      .layout-options { display:flex; gap:2px; border:1px solid var(--line); border-radius:6px; padding:2px; margin-left:8px; }
+      .layout-option { width:27px; height:27px; border-radius:4px; color:var(--muted); font-size:16px; }
+      .layout-option svg { width:16px; height:16px; fill:currentColor; stroke:currentColor; stroke-width:1.7; vertical-align:middle; }
+      .layout-option svg path { fill:none; stroke-linecap:round; }
+      .layout-option.active, .layout-option:hover { background:var(--sage); color:var(--ink); }
+      .dark .layout-options { border-color:#46564e; }
+      .dark .layout-option.active, .dark .layout-option:hover { background:#34483e; }
+      .document-grid.list-view { grid-template-columns: 1fr; gap: 10px; }
+      .list-view .doc-card { position:relative; min-height:78px; padding:14px 18px; display:grid; grid-template-columns:84px minmax(180px,1fr) minmax(220px,1.6fr) 130px; align-items:center; gap:16px; }
+      .list-view .card-top { display:contents; }
+      .list-view .file-type { grid-column:1; grid-row:1; justify-self:start; }
+      .list-view .card-star { position:absolute; right:9px; top:5px; font-size:15px; }
+      .list-view .doc-card h2 { grid-column:2; grid-row:1; margin:0; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .list-view .doc-card p { grid-column:3; grid-row:1; margin:0; -webkit-line-clamp:1; }
+      .card-tags { display:flex; flex-wrap:wrap; gap:4px; margin:10px 0 0; min-height:18px; overflow:hidden; }
+      .card-tags .tag { font-size:10px; padding:2px 7px; }
+      .list-view .doc-card { min-height:94px; }
+      .list-view .file-type { grid-row:1 / 3; }
+      .list-view .doc-card h2 { grid-row:1; }
+      .list-view .card-tags { display:flex; grid-column:2; grid-row:2; margin:0; align-self:start; }
+      .list-view .doc-card p { grid-row:1 / 3; align-self:center; }
+      .list-view .card-bottom { grid-row:1 / 3; align-self:center; }
+      @media (max-width:800px) { .list-view .doc-card { min-height:112px; } .list-view .card-tags { grid-column:2; grid-row:3; } .list-view .doc-card p { grid-row:2; } .list-view .card-bottom { grid-row:2; } }
+      .list-view .card-bottom { grid-column:4; grid-row:1; margin:0; padding:0 13px 0 0; display:flex; flex-direction:column; align-items:flex-end; gap:4px; font-size:10px; }
+      @media (max-width:800px) { .list-view .doc-card { grid-template-columns:74px 1fr; gap:8px 12px; } .list-view .doc-card h2 { grid-column:2; } .list-view .doc-card p { grid-column:2; grid-row:2; } .list-view .card-bottom { grid-column:1; grid-row:2; align-items:flex-start; padding:0; } }
+      .doc-card { border-top-width:3px; }
+      .doc-card.type-document { border-top-color:#4f85b9; background:linear-gradient(145deg,#fffefa 80%,#eaf2fa); }
+      .doc-card.type-sheet { border-top-color:#5c9b71; background:linear-gradient(145deg,#fffefa 80%,#e9f5ec); }
+      .doc-card.type-pdf { border-top-color:#8e3535; background:linear-gradient(145deg,#fffefa 80%,#f6e7e5); }
+      .doc-card.type-image { border-top-color:#b66cb9; background:linear-gradient(120deg,#fffefa 76%,#f7e5c8 84%,#e4def6 91%,#dcefee); }
+      .doc-card.type-presentation { border-top-color:#dd3434; background:linear-gradient(145deg,#fffefa 80%,#fbe3e3); }
+      .list-view .doc-card { grid-template-columns:minmax(200px,1fr) minmax(220px,1.6fr) 130px; }
+      .list-view .card-top { position:absolute; right:9px; top:5px; }
+      .list-view .doc-card h2 { grid-column:1; grid-row:1; }
+      .list-view .card-tags { grid-column:1; grid-row:2; }
+      .list-view .doc-card p { grid-column:2; grid-row:1 / 3; }
+      .list-view .card-bottom { grid-column:3; grid-row:1 / 3; }
+      @media (max-width:800px) { .list-view .doc-card { grid-template-columns:1fr 100px; } .list-view .doc-card h2 { grid-column:1; grid-row:1; } .list-view .card-tags { grid-column:1; grid-row:2; } .list-view .doc-card p { grid-column:1; grid-row:3; } .list-view .card-bottom { grid-column:2; grid-row:1 / 4; align-items:flex-end; } }
+      .dark .doc-card.type-document { background:linear-gradient(145deg,#263531 80%,#293c4c); }
+      .dark .doc-card.type-sheet { background:linear-gradient(145deg,#263531 80%,#294332); }
+      .dark .doc-card.type-pdf { background:linear-gradient(145deg,#263531 80%,#492d2d); }
+      .dark .doc-card.type-image { background:linear-gradient(120deg,#263531 76%,#4b382d 84%,#382d4a 91%,#294344); }
+      .dark .doc-card.type-presentation { background:linear-gradient(145deg,#263531 80%,#522c2c); }
+      .paper { max-width:100%; overflow:hidden; }
+      .reader { max-width:1480px; }
+      .reader.reader-document { max-width:1080px; }
+      .reader.reader-pdf { max-width:1320px; }
+      .reader.reader-sheet, .reader.reader-presentation { max-width:1780px; }
+      .article-content { max-width:100%; min-width:0; overflow-x:auto; overscroll-behavior-x:contain; }
+      .article-content table { display:block; width:max-content; min-width:100%; max-width:none; overflow-x:auto; }
+      .article-content th, .article-content td { white-space:nowrap; }
+      .pptx-viewer { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; padding:0 0 14px; }
+      .pptx-viewer .slide { max-width:100%; box-sizing:border-box; margin-left:auto!important; margin-right:auto!important; }
+      .doc-card, .doc-card h2, .doc-card p, .card-tags, .card-bottom, .tag, #readerTitle, .reader-meta, .import-summary { min-width:0; overflow-wrap:anywhere; word-break:break-word; }
+      .doc-card h2 { max-width:100%; }
+      .list-view .doc-card h2 { min-width:0; }
+      #readerTitle { hyphens:auto; }
+      .category-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      .category-delete { display:none; margin-left:5px; width:18px; height:18px; line-height:16px; text-align:center; border-radius:50%; color:#c7d3cb; font-size:16px; flex:none; }
+      .category:hover .category-delete { display:inline-block; }
+      .category-delete:hover { background:#ffffff25; color:#fff; }
+      .category { cursor:default; touch-action:none; }
+      .category.dragging { opacity:.28; }
+      .category.drag-over { outline:1px dashed #c8d8ce; outline-offset:-3px; background:#ffffff1e; }
+      .category-drag-ghost { position:fixed; z-index:9999; pointer-events:none; margin:0; opacity:.94; box-shadow:0 9px 22px #15261e66; transform:scale(1.015); }
+      .brand small { display:block; margin-top:5px; color:#b9c8c0; font:11px 'Noto Sans SC',sans-serif; letter-spacing:.04em; }
+      .accounts-list { display:grid; gap:8px; max-height:260px; overflow:auto; margin:10px 0 18px; }
+      .account-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 12px; border:1px solid var(--line); border-radius:10px; }
+      .account-row select { width:auto; margin:0; }
+      mark { background:#fde5a2; color:inherit; border-radius:2px; padding:0 1px; }
+      .dark mark { background:#825d24; }
+      .user-button { display:flex; align-items:center; gap:6px; padding:3px 5px; border:1px solid var(--line); border-radius:99px; font-size:11px; }
+      .user-button span { display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:#547c69; color:#fff; font-size:12px; }
+      .user-button b { font-weight:500; white-space:nowrap; }
+      .logout-button { padding:6px 9px; border:1px solid var(--line); border-radius:6px; color:#9a4a42; font-size:11px; }
+      .sidebar-actions { display:grid; gap:5px; margin:0 0 2px; } .sidebar-action { width:100%; min-height:40px; padding:9px 12px; border:1px solid #ffffff16; border-radius:6px; color:#dce5df; display:flex; align-items:center; gap:9px; text-align:left; font-weight:500; transition:background .18s,border-color .18s,color .18s; } .sidebar-action span { width:19px; height:19px; display:grid; place-items:center; border-radius:50%; background:#ffffff12; color:#cddbd1; font-size:16px; line-height:1; } .sidebar-action:hover { background:#ffffff16; border-color:#ffffff24; color:#fff; } .sidebar-action.import-action span { color:#f2bd92; background:#d8874b24; } .sidebar-action.note-action span { color:#b8d6c0; background:#8fb29824; } .page-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; } .batch-bar { display:flex; align-items:center; gap:10px; margin:-18px 0 24px; padding:10px 12px; border:1px solid #d9e2da; border-radius:7px; background:#f0f5f0; color:#526059; font-size:12px; } .batch-bar[hidden] { display:none; } .batch-bar span { margin-right:auto; font-weight:600; } .batch-bar button { padding:5px 8px; border-radius:5px; } .batch-bar .danger { color:#a74943; background:#fff1f0; } .batch-mode .doc-card { position:relative; padding-left:48px; } .batch-check { position:absolute; top:16px; left:16px; width:19px; height:19px; accent-color:#547c69; cursor:pointer; } .batch-mode .doc-card.selected { border-color:#6f9b84; box-shadow:0 0 0 2px #6f9b8430; }
+      @media (max-width:700px) { .top-actions { gap:2px; } .top-actions .user-button b { display:none; } .top-actions .logout-button { width:31px; height:31px; padding:0; font-size:0; } #changePasswordButton::after { content:'⌁'; font-size:17px; color:#53605c; } #logoutButton::after { content:'↪'; font-size:17px; color:#9a4a42; } }
+      @media (max-width:700px) { .page-actions { justify-content:flex-start; } .batch-bar { flex-wrap:wrap; margin-top:-8px; } .batch-bar span { width:100%; } }
+      .permission-note { margin:16px 0 0; padding:10px; border-radius:5px; background:#f2f4f0; color:var(--muted); font-size:12px; line-height:1.6; }
+      .comment-section { max-width:1080px; margin:24px auto 0; padding:24px clamp(22px,4vw,42px); border:1px solid var(--line); border-radius:9px; background:var(--paper); box-shadow:var(--shadow); } .comment-heading { display:flex; align-items:baseline; gap:8px; margin:0 0 17px; } .comment-heading h2 { margin:0; font:700 19px 'Libre Baskerville','Noto Sans SC',serif; } .comment-heading span { color:var(--muted); font:11px 'DM Mono',monospace; } .comment-form textarea { width:100%; min-height:88px; padding:10px 12px; border:1px solid #d8ded7; border-radius:6px; resize:vertical; outline-color:var(--accent); color:var(--ink); background:transparent; } .comment-replying { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px; padding:7px 9px; border-radius:5px; background:#f4f6f2; color:#627068; font-size:12px; } .comment-replying button { padding:2px 5px; color:#66746d; font-size:11px; } .comment-form-footer { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:9px; color:var(--muted); font-size:11px; } .comment-submit { padding:7px 13px; border-radius:6px; background:var(--accent); color:#fff; font-weight:600; } .comment-submit:disabled { opacity:.55; cursor:not-allowed; } .comment-list { display:grid; gap:0; margin-top:22px; } .comment-item { padding:15px 0; border-top:1px solid var(--line); } .comment-reply-list { margin:0 0 0 clamp(18px,4vw,42px); padding-left:14px; border-left:2px solid #e7ece6; } .comment-item-head { display:flex; align-items:center; gap:9px; } .comment-avatar { width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#e5ede6; color:#496555; font-size:11px; font-weight:700; } .comment-author { font-size:13px; font-weight:600; } .comment-time { color:var(--muted); font-size:11px; } .comment-reply,.comment-delete { padding:4px 6px; border-radius:4px; font-size:11px; } .comment-reply { margin-left:auto; color:#61766b; } .comment-delete { color:#a74943; } .comment-reply:hover { background:#edf2ed; } .comment-delete:hover { background:#fff0ef; } .comment-content { margin:9px 0 0 35px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.75; font-size:13px; } .comment-deleted { color:var(--muted); font-style:italic; } .comment-empty,.comment-status { margin:8px 0; color:var(--muted); font-size:12px; } .dark .comment-section { background:var(--paper); } .dark .comment-form textarea { border-color:#46564e; } .dark .comment-replying { background:#20302b; } .dark .comment-avatar { background:#34483e; color:#c5dccb; } .dark .comment-reply:hover { background:#31443a; } .dark .comment-delete:hover { background:#542f2d; } .dark .comment-reply-list { border-color:#3c5147; }
+      .dark .user-button { border-color:#46564e; } .dark .permission-note { background:#1e2b27; }
+      button:disabled { opacity:.45; cursor:not-allowed; }
+      #activityDialog { padding:25px; }
+      .activity-list { max-height:420px; overflow:auto; margin-top:12px; }
+      .activity-item { padding:11px 0; border-bottom:1px solid var(--line); font-size:12px; }
+      .activity-item strong { display:block; font-weight:600; margin-bottom:3px; }
+      .activity-item span { color:var(--muted); }
+      .login-dialog { width:min(1000px,calc(100vw - 36px)); max-width:1000px; padding:0; overflow:hidden; border:0; border-radius:20px; background:#fff; box-shadow:0 32px 100px rgba(10,26,20,.34); } .login-dialog::backdrop { background:rgba(15,31,25,.66); backdrop-filter:blur(7px); }
+      .login-layout { min-height:560px; display:grid; grid-template-columns:1.08fr .92fr; } .login-visual { position:relative; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; padding:46px 54px; color:#fff; background:linear-gradient(145deg,#173c36 0%,#214c43 58%,#a85634 180%); } .login-visual::before { content:""; position:absolute; width:420px; height:420px; top:16%; right:-190px; border:1px solid #ffffff1d; border-radius:50%; box-shadow:0 0 0 62px #ffffff09,0 0 0 124px #ffffff05; } .login-visual::after { content:"MOTOR / DESIGN / KNOWLEDGE"; position:absolute; right:-126px; bottom:112px; color:#ffffff09; font:700 52px/1 ui-monospace,monospace; letter-spacing:.08em; transform:rotate(-90deg); white-space:nowrap; }
+      .login-brand { position:relative; z-index:1; display:flex; align-items:center; gap:13px; } .login-brand .brand-mark { display:grid; place-items:center; width:43px; height:43px; border:1px solid #b7cbc2; border-radius:50%; background:transparent; color:#fff; font:700 12px ui-monospace,monospace; } .login-brand strong { display:block; color:#fff; font-size:16px; letter-spacing:.1em; } .login-brand small { display:block; margin-top:4px; color:#b9cbc4; font-size:11px; letter-spacing:.06em; }
+      .login-intro { position:relative; z-index:1; margin:auto 0; } .login-intro .login-eyebrow { color:#e09a6b; font:700 10px ui-monospace,monospace; letter-spacing:.18em; } .login-intro h1 { max-width:430px; margin:15px 0 17px; font:700 clamp(31px,3.5vw,48px)/1.25 Georgia,"Noto Serif SC",serif; letter-spacing:-.04em; } .login-intro p { max-width:410px; margin:0; color:#c4d3cd; font-size:13px; line-height:1.8; }
+      .login-points { position:relative; z-index:1; display:flex; flex-wrap:wrap; gap:20px; color:#a6bdb4; font:10px ui-monospace,monospace; letter-spacing:.08em; } .login-panel { display:flex; flex-direction:column; justify-content:center; padding:54px 58px; } .login-panel .eyebrow { color:#b15f38; font:700 10px ui-monospace,monospace; letter-spacing:.16em; } .login-panel h2 { margin:6px 0 8px; color:#25342f; font:700 29px/1.3 Georgia,"Noto Serif SC",serif; } .login-panel .permission-note { margin:0 0 28px; color:#74827c; font-size:12px; line-height:1.75; }
+      .login-panel label { display:block; margin:0 0 16px; color:#526059; font-size:11px; font-weight:600; } .login-panel input { width:100%; min-height:45px; margin-top:7px; padding:10px 12px; border:1px solid #d8dfda; border-radius:7px; outline:none; background:#fff; color:#26342f; transition:border-color .16s,box-shadow .16s; } .login-panel input:focus { border-color:#b96735; box-shadow:0 0 0 3px rgba(185,103,53,.11); } .login-password { position:relative; } .login-password input { padding-right:51px; } .password-toggle { position:absolute; right:8px; bottom:7px; min-height:31px; padding:0 9px; border:0; border-radius:5px; background:transparent; color:#75827c; font-size:11px; cursor:pointer; } .password-toggle:hover { background:#eef2ef; color:#263d35; } .auth-error { min-height:18px; margin:2px 0 10px; color:#a74943; font-size:12px; } .login-submit { width:100%; min-height:46px; margin-top:4px; } .login-security { display:block; margin-top:18px; color:#8a9691; font-size:10px; line-height:1.7; }
+      @media (max-width:720px) { .login-dialog { width:min(480px,calc(100vw - 24px)); } .login-layout { min-height:0; grid-template-columns:1fr; } .login-visual { min-height:250px; padding:27px 30px; } .login-intro { margin:42px 0 0; } .login-intro h1 { margin:10px 0; font-size:29px; } .login-intro p,.login-points { display:none; } .login-panel { padding:34px 30px 38px; } .login-visual::after { display:none; } }
+    </style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#"><span class="brand-mark">HD</span><span>HD<br /><b>MOTORS</b><small>设计知识库</small></span></a>
+          <div class="sidebar-actions"><button class="sidebar-action import-action" id="importButton"><span>＋</span> 导入资料</button><button class="sidebar-action note-action" id="newNote"><span>＋</span> 新建笔记</button></div>
+        <input id="fileInput" type="file" multiple accept=".md,.markdown,.txt,.html,.htm,.docx,.xlsx,.xls,.pdf,.pptx,.png,.jpg,.jpeg,.gif,.webp" hidden />
+        <nav>
+          <p class="nav-label">工作区</p>
+          <button class="nav-item" data-view="library"><span>▦</span> 全部资料 <em id="docCount">0</em></button>
+          <button class="nav-item" data-view="favorites"><span>☆</span> 我的收藏 <em id="favoriteCount">0</em></button>
+          <button class="nav-item active" data-view="recent"><span>◷</span> 最近阅读</button>
+          <button class="nav-item" data-view="trash"><span>♲</span> 回收站 <em id="trashCount">0</em></button>
+          <p class="nav-label category-title">分类 <button id="addCategory" title="新建分类">＋</button></p>
+          <div id="categoryList"></div>
+        </nav>
+        <div class="sidebar-tip"><span>⌘ K</span> 快速搜索</div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu">☰</button>
+          <label class="search"><span>⌕</span><input id="searchInput" placeholder="搜索标题、内容或标签…" /><kbd>⌘ K</kbd></label>
+          <div class="top-actions"><button id="viewToggle" title="切换视图">☷</button><button id="themeToggle" title="切换主题">◐</button><button id="activityButton" title="操作记录">◷</button><button id="userButton" class="user-button" title="用户与权限"><span id="userAvatar">管</span><b id="userRole">管理员</b></button><button id="changePasswordButton" class="logout-button" type="button" title="修改密码" aria-label="修改密码" hidden>修改密码</button><button id="logoutButton" class="logout-button" type="button" title="退出登录" aria-label="退出登录" hidden>退出登录</button></div>
+        </header>
+        <section class="content-area" id="libraryView">
+          <div class="page-heading"><div><p class="eyebrow">KNOWLEDGE BASE</p><h1 id="viewTitle">最近阅读</h1><p id="viewDescription">从上次停下的地方继续。</p></div></div>
+          <div class="batch-bar" id="batchBar" hidden><span id="batchCount">已选 0 份</span><button type="button" id="batchSelectAll">全选当前结果</button><button type="button" id="batchDelete" class="danger" hidden>删除</button><button type="button" id="batchRestore" hidden>恢复资料</button><button type="button" id="batchCancel">完成</button></div>
+          <div class="filter-row"><button class="filter active" data-filter="all">全部 <span id="allTotal">0</span></button><button class="filter" data-filter="document">文档</button><button class="filter" data-filter="sheet">表格</button><button class="filter" data-filter="pdf">PDF</button><button class="filter" data-filter="image">图片</button><div class="sort-wrap"><label>排序</label><select id="sortSelect"><option value="updated">最近更新</option><option value="title">标题 A–Z</option><option value="created">导入时间</option></select></div><button class="outline-button" id="batchToggle">编辑</button><div class="layout-options" aria-label="排列方式"><button class="layout-option active" data-layout="grid" title="卡片排列" aria-label="卡片排列"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="layout-option" data-layout="compact" title="紧凑排列" aria-label="紧凑排列"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx=".6"/><rect x="10" y="3" width="5" height="5" rx=".6"/><rect x="17" y="3" width="4" height="5" rx=".6"/><rect x="3" y="10" width="5" height="5" rx=".6"/><rect x="10" y="10" width="5" height="5" rx=".6"/><rect x="17" y="10" width="4" height="5" rx=".6"/><rect x="3" y="17" width="5" height="4" rx=".6"/><rect x="10" y="17" width="5" height="4" rx=".6"/><rect x="17" y="17" width="4" height="4" rx=".6"/></svg></button><button class="layout-option" data-layout="list" title="单行排列" aria-label="单行排列"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h13M8 12h13M8 19h13"/><circle cx="4" cy="5" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="19" r="1"/></svg></button></div></div>
+          <div class="document-grid" id="documentGrid"></div>
+          <div class="empty-state" id="emptyState" hidden><div class="empty-icon">⌑</div><h2>还没有资料</h2><p>拖入文件，或点击“导入资料”开始建立你的知识库。</p><button class="outline-button" id="emptyImport">导入第一份资料</button></div>
+        </section>
+        <section class="reader" id="readerView" hidden>
+          <div class="reader-top"><button class="back-button" id="backToLibrary">← 返回资料库</button><div class="reader-controls"><button id="favoriteButton">☆ 收藏</button><button id="editDocButton">编辑资料</button><button id="restoreButton" hidden>↶ 恢复</button><button id="deleteButton" class="danger">删除</button></div></div>
+          <article class="paper"><div class="reader-meta" id="readerMeta"></div><h1 id="readerTitle"></h1><div class="tag-row" id="readerTags"></div><div class="article-content" id="articleContent"></div></article>
+          <section class="comment-section" id="commentSection" aria-labelledby="commentHeading"><div class="comment-heading"><h2 id="commentHeading">评论</h2><span id="commentCount">0 条</span></div><form class="comment-form" id="commentForm"><div class="comment-replying" id="commentReplying" hidden><span id="commentReplyTarget"></span><button type="button" id="cancelCommentReply">取消回复</button></div><textarea id="commentInput" maxlength="2000" required placeholder="写下你的问题、补充或经验…"></textarea><div class="comment-form-footer"><span id="commentHint">评论将以当前账号发布</span><button class="comment-submit" id="commentSubmit" type="submit">发表评论</button></div></form><div class="comment-list" id="commentList" aria-live="polite"></div></section>
+        </section>
+      </main>
+    </div>
+    <div class="drop-overlay" id="dropOverlay"><div><strong>松开以导入</strong><span>支持 Word、Excel、PDF、Markdown、图片等格式</span></div></div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="noteDialog"><form id="noteForm"><div class="dialog-head"><h2>新建笔记</h2><button type="button" id="closeNote" aria-label="关闭">×</button></div><label>标题<input id="noteTitle" required maxlength="120" placeholder="例如：永磁同步电机设计要点" /></label><label>分类<select id="noteCategory"></select></label><label>标签 <span>用逗号分隔，可选</span><input id="noteTags" maxlength="120" placeholder="例如：PMSM, 参数设计" /></label><label>内容 <span>支持 Markdown</span><textarea id="noteContent" required placeholder="# 开始记录\n\n在这里输入内容…"></textarea></label><div class="dialog-actions"><button type="button" id="cancelNote" class="text-button">取消</button><button type="submit" id="saveNote" class="import-button">保存笔记</button></div></form></dialog>
+    <dialog id="importDialog"><form method="dialog" id="importForm"><div class="dialog-head"><h2 id="importDialogTitle">导入资料</h2><button value="cancel">×</button></div><p id="importFileSummary" class="import-summary"></p><label>导入到分类<select id="importCategory"></select></label><label>标签 <span>用逗号分隔，可选，将应用到全部文件</span><input id="importTags" maxlength="120" placeholder="例如：PMSM, 设计规范" /></label><div class="dialog-actions"><button value="cancel" class="text-button">取消</button><button value="default" class="import-button">确认导入</button></div></form></dialog>
+    <dialog id="categoryDialog"><form id="categoryForm"><div class="dialog-head"><h2>新建分类</h2><button type="button" id="closeCategory" aria-label="关闭">×</button></div><label>分类名称<input id="categoryName" required maxlength="40" placeholder="例如：产品规范" /></label><label>分类颜色<input id="categoryColor" type="color" value="#8c9d7e" /></label><div class="dialog-actions"><button type="button" id="cancelCategory" class="text-button">取消</button><button type="submit" class="import-button">创建分类</button></div></form></dialog>
+    <dialog id="userDialog"><form id="userForm"><div class="dialog-head"><h2>用户与权限</h2><button type="button" id="closeUser" aria-label="关闭">×</button></div><label>显示名称<input id="userName" required maxlength="20" placeholder="请输入名称" /></label><label>角色<select id="userRoleSelect"><option value="admin">管理员：完整管理权限</option><option value="editor">编辑者：可导入、编辑与删除</option><option value="viewer">只读访客：仅浏览与搜索</option></select></label><p class="permission-note">此为本地单用户权限模式。生产环境应接入服务端登录、会话与权限校验。</p><div class="dialog-actions"><button type="button" id="serverLogout" class="text-button" hidden>退出登录</button><button type="button" id="cancelUser" class="text-button">取消</button><button type="submit" class="import-button">保存设置</button></div></form></dialog>
+    <dialog id="passwordDialog"><form id="passwordForm"><div class="dialog-head"><h2>修改我的密码</h2><button type="button" id="closePassword" aria-label="关闭">×</button></div><p class="permission-note">密码至少 6 位。修改后，其他已登录设备会自动退出。</p><label>当前密码<input id="currentPassword" type="password" required minlength="6" autocomplete="current-password" /></label><label>新密码<input id="newPassword" type="password" required minlength="6" autocomplete="new-password" /></label><label>确认新密码<input id="confirmPassword" type="password" required minlength="6" autocomplete="new-password" /></label><div class="dialog-actions"><button type="button" id="cancelPassword" class="text-button">取消</button><button type="submit" class="import-button">保存新密码</button></div></form></dialog>
+    <dialog id="accountsDialog"><form id="accountsForm"><div class="dialog-head"><h2>账号管理</h2><button type="button" id="closeAccounts" aria-label="关闭">×</button></div><div id="accountsList" class="accounts-list"></div><div class="dialog-actions"><button type="button" id="resetAllPasswords" class="text-button">全部重置为 888888</button></div><hr><h3>新增账号</h3><label>用户名<input id="accountName" required pattern="[A-Za-z0-9_.-]{3,32}" maxlength="32" /></label><label>初始密码<input id="accountPassword" type="password" required minlength="6" value="888888" /></label><label>角色<select id="accountRole"><option value="viewer">只读访客</option><option value="editor">编辑者</option><option value="admin">管理员</option></select></label><div class="dialog-actions"><button type="submit" class="import-button">创建账号</button></div></form></dialog>
+    <dialog id="editDocDialog"><form id="editDocForm"><div class="dialog-head"><h2>编辑资料</h2><button type="button" id="closeEditDoc" aria-label="关闭">×</button></div><label>标题<input id="editDocTitle" required maxlength="120" /></label><label>分类<select id="editDocCategory"></select></label><label>标签 <span>用逗号分隔，可选</span><input id="editDocTags" maxlength="120" /></label><div class="dialog-actions"><button type="button" id="cancelEditDoc" class="text-button">取消</button><button type="submit" class="import-button">保存修改</button></div></form></dialog>
+    <dialog id="activityDialog"><div class="dialog-head"><h2>操作记录</h2><button type="button" id="closeActivity" aria-label="关闭">×</button></div><div id="activityList" class="activity-list"></div></dialog>
+    <dialog id="localLoginDialog" class="login-dialog"><form id="localLoginForm" class="login-layout"><section class="login-visual"><div class="login-brand"><span class="brand-mark">HD</span><span><strong>HD MOTORS</strong><small>设计知识库</small></span></div><div class="login-intro"><span class="login-eyebrow">DESIGN KNOWLEDGE BASE</span><h1>让每一份设计资料<br />都有序、可查、可传承。</h1><p>标准、手册、企业资料和经验笔记在同一处沉淀，支持全文阅读与分类管理。</p></div><div class="login-points"><span>01 统一资料库</span><span>02 服务端账号</span><span>03 分级权限</span></div></section><section class="login-panel"><span class="eyebrow">LAN CONNECTION</span><h2>连接知识库</h2><p class="permission-note">账号由局域网服务验证。请填写运行服务的电脑地址。</p><label>服务器地址<input id="localServerAddress" required inputmode="url" value="http://127.0.0.1:8787" placeholder="例如：http://192.168.1.20:8787" /></label><button type="submit" class="import-button login-submit">前往登录</button><small class="login-security">请使用局域网服务器地址访问，以启用账号、权限与资料同步。</small></section></form></dialog>
+    <dialog id="serverAuthDialog" class="login-dialog"><form id="serverAuthForm" class="login-layout"><section class="login-visual"><div class="login-brand"><span class="brand-mark">HD</span><span><strong>HD MOTORS</strong><small>设计知识库</small></span></div><div class="login-intro"><span class="login-eyebrow">2026 DESIGN KNOWLEDGE</span><h1>让每一份设计资料<br />都有序、可查、可传承。</h1><p>把国家标准、行业标准、设计手册与企业经验沉淀为团队可持续使用的设计资产。</p></div><div class="login-points"><span>01 独立账号</span><span>02 服务端权限</span><span>03 局域网同步</span></div></section><section class="login-panel"><span class="eyebrow">SECURE ACCESS</span><h2 id="serverAuthTitle">登录知识库</h2><p id="serverAuthHint" class="permission-note">请输入本人账号和登录密码。</p><label>登录账号<input id="serverAuthUser" required minlength="3" maxlength="32" autocomplete="username" placeholder="例如：zhangyu" /></label><label class="login-password">登录密码<input id="serverAuthPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="请输入登录密码" /><button type="button" id="toggleAuthPassword" class="password-toggle" aria-label="显示密码">显示</button></label><p id="serverAuthError" class="auth-error" aria-live="polite" hidden></p><button type="submit" class="import-button login-submit" id="serverAuthSubmit">登录</button><small class="login-security">账号和密码仅用于本局域网身份验证；如遗忘密码，请联系系统管理员重置。</small></section></form></dialog>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/css/pptxjs.css" />
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/jquery-1.11.3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/filereader.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/nv.d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/pptxjs.js"></script>
+    <script src="app.js"></script>
+    <script>
+      const requestedQuery = new URLSearchParams(window.location.search).get('q');
+      if (requestedQuery) {
+        document.querySelector('#searchInput').value = requestedQuery;
+        const requestedDocId = new URLSearchParams(window.location.search).get('doc');
+        if (requestedDocId) openDoc(requestedDocId);
+      }
+      document.querySelector('#deleteButton').onclick = async () => {
+        if (!requireEdit()) return;
+        if (!activeDoc) return;
+        const inTrash = trash.some(doc => doc.id === activeDoc.id);
+        if (inTrash) {
+          if (!confirm(`永久删除“${activeDoc.title}”？此操作不可恢复。`)) return;
+          try { if (isLanMode) await remoteRequest(`/api/documents/${activeDoc.id}?purge=1`, { method:'DELETE' }); } catch (error) { return notify(error.message || '永久删除同步失败', 'warn'); }
+          const pdfId = activeDoc.pdfId, presentationId = activeDoc.presentationId;
+          trash = trash.filter(doc => doc.id !== activeDoc.id);
+          if (pdfId) deletePdfBlob(pdfId);
+          if (presentationId) deletePresentationBlob(presentationId);
+          logActivity('永久删除资料', activeDoc.title);
+          notify('资料已永久删除');
+        } else {
+          if (!confirm(`将“${activeDoc.title}”移入回收站？`)) return;
+          try { if (isLanMode) await remoteRequest(`/api/documents/${activeDoc.id}`, { method:'DELETE' }); } catch (error) { return notify(error.message || '删除同步失败', 'warn'); }
+          docs = docs.filter(doc => doc.id !== activeDoc.id);
+          trash.unshift({ ...activeDoc, deletedAt: Date.now() });
+          logActivity('移入回收站', activeDoc.title);
+          notify('资料已移入回收站，可随时恢复');
+        }
+        save(); closeReader(); renderDocs();
+      };
+      document.querySelector('#restoreButton').onclick = async () => {
+        if (!requireEdit()) return;
+        if (!activeDoc) return;
+        const item = trash.find(doc => doc.id === activeDoc.id);
+        if (!item) return;
+        try { if (isLanMode) await remoteRequest(`/api/documents/${item.id}/restore`, { method:'POST' }); } catch (error) { return notify(error.message || '恢复同步失败', 'warn'); }
+        delete item.deletedAt;
+        trash = trash.filter(doc => doc.id !== item.id);
+        docs.unshift(item);
+        logActivity('恢复资料', item.title);
+        save(); closeReader(); renderDocs(); notify('资料已恢复', 'success');
+      };
+      document.querySelector('#editDocButton').onclick = () => {
+        if (!requireEdit() || !activeDoc) return;
+        document.querySelector('#editDocTitle').value = activeDoc.title;
+        document.querySelector('#editDocCategory').innerHTML = categories.map(category => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.name)}</option>`).join('');
+        document.querySelector('#editDocCategory').value = activeDoc.category;
+        document.querySelector('#editDocTags').value = (activeDoc.tags || []).join(', ');
+        document.querySelector('#editDocDialog').showModal();
+      };
+      document.querySelector('#closeEditDoc').onclick = document.querySelector('#cancelEditDoc').onclick = () => document.querySelector('#editDocDialog').close();
+      document.querySelector('#editDocForm').addEventListener('submit', async event => {
+        event.preventDefault(); if (!requireEdit() || !activeDoc) return;
+        const title = document.querySelector('#editDocTitle').value.trim().replace(/\s+/g, ' ');
+        if (!title) return notify('标题不能为空', 'warn');
+        activeDoc.title = title;
+        activeDoc.category = document.querySelector('#editDocCategory').value;
+        activeDoc.tags = parseTags(document.querySelector('#editDocTags').value);
+        activeDoc.updated = Date.now();
+        const collection = trash.some(doc => doc.id === activeDoc.id) ? trash : docs;
+        const index = collection.findIndex(doc => doc.id === activeDoc.id);
+        if (index >= 0) collection[index] = activeDoc;
+        logActivity('编辑资料信息', activeDoc.title);
+        try { await updateRemoteDoc(activeDoc); } catch (error) { return notify(error.message || '资料同步失败', 'warn'); }
+        save(); document.querySelector('#editDocDialog').close(); openDoc(activeDoc.id); renderDocs(); notify('资料信息已更新', 'success');
+      });
+      loadFromDatabase().then(saved => {
+        if (Array.isArray(saved?.trash)) { trash = saved.trash; renderDocs(); }
+        if (Array.isArray(saved?.activities)) activities = saved.activities;
+      });
+      document.querySelector('#userButton').onclick = () => {
+        document.querySelector('#userName').value = currentUser.name;
+        document.querySelector('#userRoleSelect').value = currentUser.role;
+        document.querySelector('#userDialog').showModal();
+      };
+      document.querySelector('#closeUser').onclick = document.querySelector('#cancelUser').onclick = () => document.querySelector('#userDialog').close();
+      document.querySelector('#userForm').addEventListener('submit', event => {
+        event.preventDefault();
+        const name = document.querySelector('#userName').value.trim();
+        if (!name) return;
+        currentUser = { name, role: document.querySelector('#userRoleSelect').value };
+        localStorage.setItem(userKey, JSON.stringify(currentUser));
+        logActivity('更新本地角色', currentUser.role);
+        save();
+        document.querySelector('#userDialog').close(); applyPermissions(); notify('用户权限设置已更新', 'success');
+      });
+      document.querySelector('#activityButton').onclick = async () => {
+        const list = document.querySelector('#activityList');
+        if (isLanMode) {
+          try {
+            const data = await remoteRequest('/api/audit');
+            list.innerHTML = data.items.length ? data.items.map(item => `<div class="activity-item"><strong>${escapeHtml(item.action)} · ${escapeHtml(item.target || '')}</strong><span>${escapeHtml(item.username || '系统')} · ${new Date(item.created_at).toLocaleString('zh-CN')}</span></div>`).join('') : '<p class="permission-note">暂无服务器操作记录。</p>';
+          } catch (error) { list.innerHTML = `<p class="permission-note">${escapeHtml(error.message || '只有管理员可以查看服务器操作记录。')}</p>`; }
+          document.querySelector('#activityDialog').showModal(); return;
+        }
+        list.innerHTML = activities.length ? activities.map(item => `<div class="activity-item"><strong>${escapeHtml(item.action)} · ${escapeHtml(item.target)}</strong><span>${escapeHtml(item.user)} · ${new Date(item.time).toLocaleString('zh-CN')}</span></div>`).join('') : '<p class="permission-note">暂无操作记录。</p>';
+        document.querySelector('#activityDialog').showModal();
+      };
+      document.querySelector('#closeActivity').onclick = () => document.querySelector('#activityDialog').close();
+      if (location.protocol === 'http:' || location.protocol === 'https:') {
+        const authDialog = document.querySelector('#serverAuthDialog');
+        const authForm = document.querySelector('#serverAuthForm');
+        const authPassword = document.querySelector('#serverAuthPassword');
+        const authSubmit = document.querySelector('#serverAuthSubmit');
+        document.querySelector('#toggleAuthPassword').onclick = event => {
+          const visible = authPassword.type === 'text'; authPassword.type = visible ? 'password' : 'text';
+          event.currentTarget.textContent = visible ? '显示' : '隐藏'; event.currentTarget.setAttribute('aria-label', visible ? '显示密码' : '隐藏密码');
+        };
+        let bootstrapMode = false;
+        const showAuth = (bootstrapRequired) => {
+          bootstrapMode = bootstrapRequired;
+          document.querySelector('#serverAuthTitle').textContent = bootstrapRequired ? '初始化管理员' : '局域网登录';
+          document.querySelector('#serverAuthHint').textContent = bootstrapRequired ? '首次使用：请创建局域网管理员账号。密码至少 6 位。' : '请使用服务端账号登录。';
+          document.querySelector('#serverAuthSubmit').textContent = bootstrapRequired ? '创建管理员并登录' : '登录';
+          authDialog.showModal();
+        };
+        fetch('/api/auth/me').then(response => response.json()).then(data => {
+          if (data.user) { currentUser = { name:data.user.username, role:data.user.role }; applyPermissions(); setupLanAccountUi(); syncRemoteLibrary().catch(error => notify(error.message || '资料同步失败', 'warn')); }
+          else showAuth(data.bootstrapRequired);
+        }).catch(() => {});
+        authForm.addEventListener('submit', async event => {
+          event.preventDefault();
+          const error = document.querySelector('#serverAuthError'); error.hidden = true;
+          authSubmit.disabled = true; const originalText = authSubmit.textContent; authSubmit.textContent = '正在验证…';
+          try {
+            const response = await fetch(bootstrapMode ? '/api/auth/bootstrap' : '/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', body:JSON.stringify({ username:document.querySelector('#serverAuthUser').value.trim(), password:authPassword.value }) });
+            const data = await response.json();
+            if (!response.ok) { error.textContent = data.error || '登录失败'; error.hidden = false; return; }
+            currentUser = { name:data.user.username, role:data.user.role }; localStorage.setItem(userKey,JSON.stringify(currentUser)); applyPermissions(); setupLanAccountUi(); authDialog.close(); await syncRemoteLibrary(); notify('已登录局域网知识库','success');
+          } catch (requestError) { error.textContent = '无法连接服务器，请检查局域网连接后重试。'; error.hidden = false; }
+          finally { authSubmit.disabled = false; authSubmit.textContent = originalText; }
+        });
+      } else {
+        const next = `/${location.search}${location.hash}`;
+        location.replace(`http://127.0.0.1:8787/login.html?next=${encodeURIComponent(next)}`);
+      }
+      function setupLanAccountUi() {
+        document.querySelector('#userName').disabled = true;
+        document.querySelector('#userRoleSelect').disabled = true;
+        document.querySelector('#userForm button[type="submit"]').hidden = true;
+        document.querySelector('#serverLogout').hidden = false;
+        document.querySelector('#changePasswordButton').hidden = false;
+        document.querySelector('#logoutButton').hidden = false;
+        document.querySelector('#userDialog .permission-note').textContent = '局域网账号与权限由服务器管理。';
+        if (currentUser.role === 'admin') document.querySelector('#userButton').onclick = openAccounts;
+      }
+      const signOut = async () => {
+        try { await remoteRequest('/api/auth/logout', {method:'POST'}); localStorage.removeItem(userKey); location.replace('/login.html'); }
+        catch (error) { notify(error.message || '退出登录失败', 'warn'); }
+      };
+      document.querySelector('#serverLogout').onclick = signOut;
+      document.querySelector('#logoutButton').onclick = signOut;
+      const passwordDialog = document.querySelector('#passwordDialog');
+      document.querySelector('#changePasswordButton').onclick = () => { document.querySelector('#passwordForm').reset(); passwordDialog.showModal(); setTimeout(() => document.querySelector('#currentPassword').focus(), 0); };
+      document.querySelector('#closePassword').onclick = document.querySelector('#cancelPassword').onclick = () => passwordDialog.close();
+      document.querySelector('#passwordForm').addEventListener('submit', async event => {
+        event.preventDefault(); const currentPassword = document.querySelector('#currentPassword').value, newPassword = document.querySelector('#newPassword').value;
+        if (newPassword !== document.querySelector('#confirmPassword').value) return notify('两次输入的新密码不一致', 'warn');
+        try { await remoteRequest('/api/auth/password', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({currentPassword,newPassword}) }); passwordDialog.close(); notify('密码已修改', 'success'); }
+        catch (error) { notify(error.message || '密码修改失败', 'warn'); }
+      });
+      async function openAccounts() {
+        try { await refreshAccounts(); document.querySelector('#accountsDialog').showModal(); }
+        catch (error) { notify(error.message || '账号列表加载失败', 'warn'); }
+      }
+      async function refreshAccounts() {
+        const data = await remoteRequest('/api/users');
+        document.querySelector('#accountsList').innerHTML = data.users.map(user => `<div class="account-row"><strong>${escapeHtml(user.username)}</strong><span><select data-account-role="${user.id}" ${user.username===currentUser.name?'disabled':''}><option value="admin" ${user.role==='admin'?'selected':''}>管理员</option><option value="editor" ${user.role==='editor'?'selected':''}>编辑者</option><option value="viewer" ${user.role==='viewer'?'selected':''}>只读访客</option></select><button type="button" class="text-button" data-account-password="${user.id}">重设密码</button></span></div>`).join('');
+      }
+      document.querySelector('#closeAccounts').onclick = () => document.querySelector('#accountsDialog').close();
+      document.querySelector('#accountsList').addEventListener('change', async event => {
+        const select = event.target.closest('[data-account-role]'); if (!select) return;
+        try { await remoteRequest(`/api/users/${select.dataset.accountRole}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({role:select.value}) }); notify('账号角色已更新', 'success'); }
+        catch (error) { notify(error.message || '角色更新失败', 'warn'); await refreshAccounts(); }
+      });
+      document.querySelector('#accountsList').addEventListener('click', async event => {
+        const button = event.target.closest('[data-account-password]'); if (!button) return;
+        const password = prompt('请输入新密码（至少 6 位）', '888888'); if (!password) return;
+        try { await remoteRequest(`/api/users/${button.dataset.accountPassword}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password}) }); notify('密码已重设', 'success'); }
+        catch (error) { notify(error.message || '密码重设失败', 'warn'); }
+      });
+      document.querySelector('#accountsForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        try { await remoteRequest('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.querySelector('#accountName').value.trim(), password:document.querySelector('#accountPassword').value, role:document.querySelector('#accountRole').value}) }); event.target.reset(); await refreshAccounts(); notify('账号已创建', 'success'); }
+        catch (error) { notify(error.message || '创建账号失败', 'warn'); }
+      });
+      document.querySelector('#resetAllPasswords').onclick = async () => {
+        if (!confirm('确定将所有账号密码重置为 888888 吗？所有已登录账号将退出。')) return;
+        try { await remoteRequest('/api/users/reset-passwords', { method:'POST' }); localStorage.removeItem(userKey); document.querySelector('#accountsDialog').close(); location.replace('/login.html'); }
+        catch (error) { notify(error.message || '全部密码重置失败', 'warn'); }
+      };
+      document.addEventListener('submit', async event => {
+        if (!isLanMode || event.target.id !== 'noteForm') return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!requireEdit() || noteSaving) return;
+        const title = document.querySelector('#noteTitle').value.trim().replace(/\s+/g, ' ');
+        const source = document.querySelector('#noteContent').value.trim();
+        if (!title || !source) return notify('请填写笔记标题和内容', 'warn');
+        noteSaving = true;
+        try {
+          const doc = { id:crypto.randomUUID(), title, type:'document', category:document.querySelector('#noteCategory').value, tags:[...new Set(['笔记', ...parseTags(document.querySelector('#noteTags').value)])], updated:Date.now(), created:Date.now(), favorite:false, content:sanitizeHtml(needLibrary('marked').parse(source)) };
+          await createRemoteDoc(doc); docs.unshift(doc); save(); document.querySelector('#noteDialog').close(); renderDocs(); notify('笔记已保存到局域网知识库', 'success');
+        } catch (error) { notify(error.message || '笔记保存失败', 'warn'); }
+        finally { noteSaving = false; }
+      }, true);
+      document.addEventListener('click', async event => {
+        const deleteCategoryButton = event.target.closest('[data-delete-category]');
+        if (deleteCategoryButton) { event.preventDefault(); event.stopImmediatePropagation(); await deleteCategory(deleteCategoryButton.dataset.deleteCategory); return; }
+        if (!isLanMode || event.target.id !== 'favoriteButton') return;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!activeDoc) return;
+        const previous = activeDoc.favorite; activeDoc.favorite = !previous;
+        try { await updateRemoteFavorite(activeDoc); } catch (error) { activeDoc.favorite = previous; return notify(error.message || '收藏同步失败', 'warn'); }
+        save(); document.querySelector('#favoriteButton').textContent = activeDoc.favorite ? '★ 已收藏' : '☆ 收藏'; renderDocs();
+      }, true);
+      const categoryDialog = document.querySelector('#categoryDialog');
+      document.querySelector('#addCategory').onclick = event => {
+        event.preventDefault(); event.stopPropagation();
+        if (!canManage()) return notify('只有管理员可以管理分类。', 'warn');
+        document.querySelector('#categoryForm').reset(); document.querySelector('#categoryColor').value = '#8c9d7e'; categoryDialog.showModal(); setTimeout(() => document.querySelector('#categoryName').focus(), 0);
+      };
+      document.querySelector('#closeCategory').onclick = document.querySelector('#cancelCategory').onclick = () => categoryDialog.close();
+      document.querySelector('#categoryForm').addEventListener('submit', async event => {
+        event.preventDefault(); if (!canManage()) return notify('只有管理员可以管理分类。', 'warn');
+        const name = document.querySelector('#categoryName').value.trim().replace(/\s+/g, ' '), color = document.querySelector('#categoryColor').value;
+        if (!name) return; if (categories.some(category => category.name === name)) return notify('分类已存在', 'warn');
+        try { const category = isLanMode ? (await remoteRequest('/api/categories', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,color})})).category : {name,color}; categories.push(category); save(); renderDocs(); categoryDialog.close(); notify('分类已创建', 'success'); }
+        catch (error) { notify(error.message || '分类创建失败', 'warn'); }
+      });
+      const categoryList = document.querySelector('#categoryList');
+      let categoryDrag = null;
+      let suppressCategoryClick = false;
+      const animateCategoryMove = move => {
+        const before = new Map([...categoryList.children].map(element => [element.dataset.category, element.getBoundingClientRect()]));
+        move();
+        [...categoryList.children].forEach(element => { const oldBox = before.get(element.dataset.category), newBox = element.getBoundingClientRect(); if (!oldBox) return; const delta = oldBox.top - newBox.top; if (!delta) return; element.style.transition = 'none'; element.style.transform = `translateY(${delta}px)`; requestAnimationFrame(() => { element.style.transition = 'transform .18s ease'; element.style.transform = ''; }); });
+      };
+      const finishCategoryDrag = async () => {
+        if (!categoryDrag) return; const state = categoryDrag; categoryDrag = null;
+        state.item.classList.remove('dragging'); state.ghost.remove(); document.querySelectorAll('.category.drag-over').forEach(element => element.classList.remove('drag-over'));
+        if (!state.moved) return;
+        suppressCategoryClick = true; setTimeout(() => { suppressCategoryClick = false; }, 0);
+        const order = [...categoryList.querySelectorAll('[data-category]')].map(element => element.dataset.category);
+        categories = order.map(name => categories.find(category => category.name === name)).filter(Boolean); renderDocs();
+        try { if (isLanMode) await remoteRequest('/api/categories/order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({order:categories.map(category=>category.name)})}); save(); notify('分类顺序已保存','success'); }
+        catch (error) { categories = state.previous; renderDocs(); notify(error.message || '分类排序保存失败','warn'); }
+      };
+      categoryList.addEventListener('pointerdown', event => {
+        const item = event.target.closest('[data-category]'); if (!item || event.target.closest('[data-delete-category]') || !canManage() || event.button !== 0) return;
+        const box = item.getBoundingClientRect(), ghost = item.cloneNode(true); ghost.classList.add('category-drag-ghost'); ghost.style.width = `${box.width}px`; ghost.style.left = `${box.left}px`; ghost.style.top = `${box.top}px`;
+        categoryDrag = { item, ghost, previous:categories.slice(), startX:event.clientX, startY:event.clientY, offsetY:event.clientY-box.top, moved:false }; document.body.append(ghost); item.setPointerCapture?.(event.pointerId);
+      });
+      document.addEventListener('pointermove', event => {
+        if (!categoryDrag) return; const state = categoryDrag, distance = Math.hypot(event.clientX-state.startX,event.clientY-state.startY); if (distance < 5 && !state.moved) return;
+        state.moved = true; state.item.classList.add('dragging'); state.ghost.style.top = `${event.clientY-state.offsetY}px`;
+        const target = document.elementFromPoint(event.clientX,event.clientY)?.closest('#categoryList [data-category]'); if (!target || target === state.item) return;
+        const after = event.clientY > target.getBoundingClientRect().top + target.getBoundingClientRect().height/2;
+        if ((after && target.nextElementSibling === state.item) || (!after && target.previousElementSibling === state.item)) return;
+        animateCategoryMove(() => categoryList.insertBefore(state.item, after ? target.nextElementSibling : target)); document.querySelectorAll('.category.drag-over').forEach(element => element.classList.remove('drag-over')); target.classList.add('drag-over');
+      });
+      document.addEventListener('pointerup', finishCategoryDrag);
+      document.addEventListener('pointercancel', finishCategoryDrag);
+      categoryList.addEventListener('click', event => { if (suppressCategoryClick) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+      document.addEventListener('submit', event => {
+        if ((event.target.id === 'importForm' || event.target.id === 'noteForm' || event.target.id === 'editDocForm') && !canEdit()) {
+          event.preventDefault(); event.stopImmediatePropagation(); notify('当前为只读访客，没有编辑权限。', 'warn');
+        }
+      }, true);
+      window.addEventListener('drop', event => {
+        if (!canEdit()) { event.preventDefault(); event.stopImmediatePropagation(); notify('当前为只读访客，没有导入权限。', 'warn'); }
+      }, true);
+      applyPermissions();
+      const renderDocsBase = renderDocs;
+      let batchMode = false;
+      const selectedDocIds = new Set();
+      const updateBatchUi = () => {
+        const bar = document.querySelector('#batchBar'), count = document.querySelector('#batchCount'), toggle = document.querySelector('#batchToggle'), inTrash = view === 'trash', hasSelection = selectedDocIds.size > 0;
+        bar.hidden = !batchMode; count.textContent = `已选 ${selectedDocIds.size} 份`; toggle.textContent = batchMode ? '完成' : '编辑'; toggle.classList.toggle('active', batchMode); toggle.disabled = !canEdit();
+        document.querySelector('#batchDelete').hidden = !hasSelection || inTrash; document.querySelector('#batchRestore').hidden = !hasSelection || !inTrash;
+      };
+      renderDocs = function () {
+        renderDocsBase(); const grid = document.querySelector('#documentGrid'), selectable = canEdit();
+        grid.classList.toggle('batch-mode', batchMode && selectable);
+        if (batchMode && selectable) [...grid.querySelectorAll('.doc-card')].forEach(card => {
+          const checked = selectedDocIds.has(card.dataset.id); card.classList.toggle('selected', checked);
+          const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.className = 'batch-check'; checkbox.dataset.batchSelect = card.dataset.id; checkbox.checked = checked; checkbox.setAttribute('aria-label', `选择 ${card.querySelector('h2')?.textContent || '资料'}`); card.prepend(checkbox);
+        });
+        updateBatchUi();
+      };
+      document.querySelector('#batchToggle').onclick = () => { if (!canEdit()) return notify('当前为只读访客，没有编辑权限。', 'warn'); batchMode = !batchMode; selectedDocIds.clear(); renderDocs(); };
+      document.querySelector('#batchCancel').onclick = () => { batchMode = false; selectedDocIds.clear(); renderDocs(); };
+      document.querySelector('#batchSelectAll').onclick = () => { currentDocs().forEach(doc => selectedDocIds.add(doc.id)); renderDocs(); };
+      document.querySelector('#documentGrid').addEventListener('click', event => {
+        if (!batchMode) return; const card = event.target.closest('.doc-card'); if (!card) return;
+        event.preventDefault(); event.stopImmediatePropagation(); const id = card.dataset.id; if (selectedDocIds.has(id)) selectedDocIds.delete(id); else selectedDocIds.add(id); renderDocs();
+      }, true);
+      document.querySelector('#batchDelete').onclick = async () => {
+        const ids = [...selectedDocIds]; if (!ids.length) return notify('请先选择资料。', 'warn'); if (!confirm(`删除选中的 ${ids.length} 份资料？`)) return;
+        try {
+          if (isLanMode) { const result = await remoteRequest('/api/documents/batch-delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids}) }); await syncRemoteLibrary(); notify(`已删除 ${result.count} 份资料`, 'success'); }
+          else { const picked = docs.filter(doc => selectedDocIds.has(doc.id)); docs = docs.filter(doc => !selectedDocIds.has(doc.id)); trash.unshift(...picked.map(doc => ({...doc,deletedAt:Date.now()}))); save(); notify(`已删除 ${picked.length} 份资料`, 'success'); }
+          batchMode = false; selectedDocIds.clear(); renderDocs();
+        } catch (error) { notify(error.message || '批量删除失败', 'warn'); }
+      };
+      document.querySelector('#batchRestore').onclick = async () => {
+        const ids = [...selectedDocIds]; if (!ids.length) return notify('请先选择资料。', 'warn');
+        try {
+          if (isLanMode) { const result = await remoteRequest('/api/documents/batch-restore', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids}) }); await syncRemoteLibrary(); notify(`已恢复 ${result.count} 份资料`, 'success'); }
+          else { const picked = trash.filter(doc => selectedDocIds.has(doc.id)); trash = trash.filter(doc => !selectedDocIds.has(doc.id)); docs.unshift(...picked.map(doc => ({...doc,deletedAt:undefined,updated:Date.now()}))); save(); notify(`已恢复 ${picked.length} 份资料`, 'success'); }
+          batchMode = false; selectedDocIds.clear(); renderDocs();
+        } catch (error) { notify(error.message || '批量恢复失败', 'warn'); }
+      };
+      renderDocs();
+    </script>
+  </body>
+</html>
