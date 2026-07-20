@@ -8,15 +8,21 @@ import { fileURLToPath } from 'node:url';
 const port = 18991;
 const workdir = await mkdtemp(join(tmpdir(), 'hd-kb-test-'));
 const serverFile = fileURLToPath(new URL('../server.mjs', import.meta.url));
-const child = spawn(process.execPath, [serverFile], { cwd: workdir, env: { ...process.env, PORT:String(port), HOST:'127.0.0.1' }, stdio:['ignore', 'pipe', 'pipe'] });
+const child = spawn(process.execPath, [serverFile], { cwd: workdir, env: { ...process.env, PORT:String(port), HOST:'127.0.0.1', DATA_DIR:join(workdir,'data') }, stdio:['ignore', 'pipe', 'pipe'] });
 let output = '', cookie = '';
 child.stdout.on('data', chunk => output += chunk); child.stderr.on('data', chunk => output += chunk);
 const waitForServer = async () => { const until = Date.now()+10_000; while(Date.now()<until){try{if((await fetch(`http://127.0.0.1:${port}/api/auth/me`)).ok)return}catch{} await new Promise(resolve=>setTimeout(resolve,80))} throw new Error(`测试服务未启动：${output}`); };
 const request = async (path, options={}) => { const response=await fetch(`http://127.0.0.1:${port}${path}`,{...options,headers:{...(options.headers||{}),...(cookie?{cookie}:{})}}); return {response,data:await response.json().catch(()=>({}))}; };
 try {
   await waitForServer();
-  let result=await fetch(`http://127.0.0.1:${port}/`,{redirect:'manual'}); assert.equal(result.status,302); assert.match(result.headers.get('location')||'',/^\/login\.html\?next=/);
+  let result=await request('/api/health'); assert.equal(result.response.status,200); assert.equal(result.data.status,'healthy');
+  result=await fetch(`http://127.0.0.1:${port}/login.html`); assert.equal(result.status,200); assert.match(result.headers.get('content-security-policy')||'',/default-src 'self'/); assert.match(result.headers.get('content-type')||'',/text\/html/);
+  result=await fetch(`http://127.0.0.1:${port}/vendor/marked.js`); assert.equal(result.status,200); assert.match(result.headers.get('cache-control')||'',/max-age=3600/);
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/me`,{headers:{cookie:'sid=%E0%A4%A'}}); assert.equal(result.status,200); assert.equal((await result.json()).user,null);
+  result=await fetch(`http://127.0.0.1:${port}/`,{redirect:'manual'}); assert.equal(result.status,302); assert.match(result.headers.get('location')||'',/^\/login\.html\?next=/);
   result=await fetch(`http://127.0.0.1:${port}/data/knowledge.db`); assert.equal(result.status,404);
+  result=await fetch(`http://127.0.0.1:${port}/login.html`,{method:'POST'}); assert.equal(result.status,405);
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/bootstrap`,{method:'POST',headers:{'Content-Type':'application/json',Origin:'http://malicious.invalid'},body:'{}'}); assert.equal(result.status,403);
   result=await request('/api/auth/bootstrap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_admin',password:'test-password-123'})}); assert.equal(result.response.status,201); cookie=result.response.headers.get('set-cookie').split(';')[0];
   for(let attempt=0;attempt<5;attempt++){result=await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'brute_test',password:'incorrect-password'})});assert.equal(result.response.status,401)}
   result=await request('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'brute_test',password:'incorrect-password'})}); assert.equal(result.response.status,429);
@@ -25,6 +31,9 @@ try {
   result=await request('/api/categories'); assert.deepEqual(result.data.categories.map(category=>category.name),categoryOrder);
   result=await request('/api/categories',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'接口测试',color:'#8c9d7e'})}); assert.equal(result.response.status,201);
   result=await request('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'test-password-456',role:'viewer'})}); assert.equal(result.response.status,201);
+  result=await request('/api/users/2',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disabled:true})}); assert.equal(result.response.status,200);
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'test-password-456'})}); assert.equal(result.status,401);
+  result=await request('/api/users/2',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disabled:false})}); assert.equal(result.response.status,200);
   const viewerLogin=await fetch(`http://127.0.0.1:${port}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'test-password-456'})}); const viewerCookie=viewerLogin.headers.get('set-cookie').split(';')[0]; assert.equal(viewerLogin.status,200);
   result=await fetch(`http://127.0.0.1:${port}/api/auth/password`,{method:'POST',headers:{'Content-Type':'application/json',cookie:viewerCookie},body:JSON.stringify({currentPassword:'test-password-456',newPassword:'viewer-password-654'})}); assert.equal(result.status,200);
   result=await fetch(`http://127.0.0.1:${port}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'test-password-456'})}); assert.equal(result.status,401);
@@ -32,7 +41,9 @@ try {
   result=await request('/api/users/2',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:'test-password-789'})}); assert.equal(result.response.status,200);
   result=await fetch(`http://127.0.0.1:${port}/api/auth/me`,{headers:{cookie:viewerCookie}}); assert.equal((await result.json()).user,null);
   const id='11111111-1111-4111-8111-111111111111';
-  result=await request('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,title:'接口资料',type:'document',category:'接口测试',tags:['回归'],content:'<p>全文检索内容</p>',metadata:{}})}); assert.equal(result.response.status,201);
+  result=await request('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'无效资料',type:'executable',category:'接口测试'})}); assert.equal(result.response.status,400);
+  result=await request('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:'无效分类资料',type:'document',category:'不存在'})}); assert.equal(result.response.status,400);
+  result=await request('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,title:'接口资料',type:'document',category:'接口测试',tags:['回归'],content:`<p>${'全文检索内容'.repeat(3000)}</p>`,metadata:{}})}); assert.equal(result.response.status,201);
   const batchId='22222222-2222-4222-8222-222222222222'; result=await request('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:batchId,title:'批量删除资料',type:'document',category:'接口测试',tags:[],content:'<p>待删除</p>',metadata:{}})}); assert.equal(result.response.status,201);
   result=await request('/api/documents/batch-delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[batchId]})}); assert.equal(result.response.status,200); assert.equal(result.data.count,1);
   result=await request('/api/documents/batch-restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[batchId]})}); assert.equal(result.response.status,200); assert.equal(result.data.count,1);
@@ -48,8 +59,12 @@ try {
   result=await request(`/api/documents/${id}/comments`); assert.equal(result.response.status,200); assert.equal(result.data.comments.length,3); assert.equal(result.data.comments[0].can_delete,true);
   result=await request(`/api/documents/${id}/comments/${adminCommentId}`,{method:'DELETE'}); assert.equal(result.response.status,200);
   result=await request(`/api/documents/${id}/comments`); assert.equal(result.response.status,200); assert.equal(result.data.comments.length,3); assert.ok(result.data.comments.find(comment=>comment.id===adminCommentId).deleted_at); assert.equal(result.data.comments.find(comment=>comment.id===retainedReply.id).parent_id,adminCommentId);
-  result=await request(`/api/attachments/${id}`,{method:'PUT',body:'attachment-test'}); assert.equal(result.response.status,201);
-  result=await request('/api/documents'); assert.equal(result.data.documents.length,1); assert.equal(result.data.documents[0].favorite,1); assert.equal(result.data.documents[0].created_by,'test_admin');
+  result=await request(`/api/attachments/${id}`,{method:'PUT',headers:{'Content-Type':'application/pdf'},body:'attachment-test'}); assert.equal(result.response.status,201); assert.equal(result.data.contentType,'application/pdf');
+  result=await fetch(`http://127.0.0.1:${port}/api/attachments/${id}`,{method:'HEAD',headers:{cookie}}); assert.equal(result.status,200); assert.equal(result.headers.get('content-type'),'application/pdf'); assert.equal(result.headers.get('accept-ranges'),'bytes');
+  result=await fetch(`http://127.0.0.1:${port}/api/attachments/${id}`,{headers:{cookie,Range:'bytes=0-3'}}); assert.equal(result.status,206); assert.equal((await result.arrayBuffer()).byteLength,4);
+  result=await request('/api/documents'); assert.equal(result.data.documents.length,1); assert.equal(result.data.documents[0].favorite,1); assert.equal(result.data.documents[0].created_by,'test_admin'); assert.equal(Object.hasOwn(result.data.documents[0],'content'),false); assert.match(result.data.documents[0].summary,/全文检索内容/);
+  result=await request('/api/documents/search?q='+encodeURIComponent('全文检索内容')); assert.equal(result.response.status,200); assert.deepEqual(result.data.ids,[id]);
+  result=await fetch(`http://127.0.0.1:${port}/api/documents/${id}`,{headers:{cookie,'Accept-Encoding':'gzip'}}); assert.equal(result.status,200); assert.equal(result.headers.get('content-encoding'),'gzip'); assert.match((await result.json()).document.content,/全文检索内容/);
   result=await request(`/api/categories/${encodeURIComponent('接口测试')}`,{method:'DELETE'}); assert.equal(result.response.status,200);
   result=await request('/api/documents'); assert.equal(result.data.documents[0].category,'未定义');
   result=await request(`/api/documents/${id}`,{method:'DELETE'}); assert.equal(result.response.status,200);
@@ -59,8 +74,8 @@ try {
   result=await request(`/api/attachments/${id}`); assert.equal(result.response.status,404);
   result=await request('/api/users/reset-passwords',{method:'POST'}); assert.equal(result.response.status,200); assert.equal(result.data.count,2);
   result=await fetch(`http://127.0.0.1:${port}/api/auth/me`,{headers:{cookie}}); assert.equal((await result.json()).user,null);
-  result=await fetch(`http://127.0.0.1:${port}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'888888'})}); assert.equal(result.status,200);
-  result=await request('/api/auth/logout',{method:'POST'}); assert.equal(result.response.status,200);
-  cookie=''; result=await request('/api/auth/me'); assert.equal(result.data.user,null);
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'test_viewer',password:'888888'})}); assert.equal(result.status,200); const finalCookie=result.headers.get('set-cookie').split(';')[0];
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/logout`,{method:'POST',headers:{cookie:finalCookie}}); assert.equal(result.status,200);
+  result=await fetch(`http://127.0.0.1:${port}/api/auth/me`,{headers:{cookie:finalCookie}}); assert.equal((await result.json()).user,null);
   console.log('API smoke test passed');
 } finally { child.kill(); await rm(workdir,{recursive:true,force:true}); }

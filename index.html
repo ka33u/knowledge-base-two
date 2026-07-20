@@ -4,9 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>电机设计知识库</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
     <style>
       .content-area { max-width: 1680px; }
@@ -86,12 +83,27 @@
       .account-row select { width:auto; margin:0; }
       mark { background:#fde5a2; color:inherit; border-radius:2px; padding:0 1px; }
       .dark mark { background:#825d24; }
-      .user-button { display:flex; align-items:center; gap:6px; padding:3px 5px; border:1px solid var(--line); border-radius:99px; font-size:11px; }
-      .user-button span { display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:#547c69; color:#fff; font-size:12px; }
-      .user-button b { font-weight:500; white-space:nowrap; }
-      .logout-button { padding:6px 9px; border:1px solid var(--line); border-radius:6px; color:#9a4a42; font-size:11px; }
+      .profile-wrap { position:relative; }
+      .user-button { width:38px; height:38px; padding:0; display:grid; place-items:center; border:1px solid #ccd6cf; border-radius:50%; background:#fff; transition:box-shadow .18s,border-color .18s,transform .18s; }
+      .user-button:hover,.user-button[aria-expanded="true"] { border-color:#789282; box-shadow:0 0 0 3px #6f9b8420; transform:translateY(-1px); }
+      .user-button span { display:grid; place-items:center; width:30px; height:30px; border-radius:50%; background:linear-gradient(145deg,#456d5b,#71927d); color:#fff; font-size:13px; font-weight:700; }
+      .profile-popover { position:absolute; z-index:20; top:48px; right:0; width:270px; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--paper); box-shadow:0 20px 55px #1d302638; transform-origin:top right; animation:profile-in .15s ease-out; }
+      .profile-popover[hidden] { display:none; }
+      @keyframes profile-in { from { opacity:0; transform:translateY(-5px) scale(.98); } to { opacity:1; transform:none; } }
+      .profile-summary { display:flex; align-items:center; gap:11px; padding:9px 8px 13px; border-bottom:1px solid var(--line); }
+      .profile-avatar-large { width:40px; height:40px; flex:none; display:grid; place-items:center; border-radius:50%; background:linear-gradient(145deg,#456d5b,#71927d); color:#fff; font-size:15px; font-weight:700; }
+      .profile-summary strong { display:block; max-width:170px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+      .profile-summary small { display:block; margin-top:3px; color:var(--muted); font-size:11px; }
+      .profile-menu { display:grid; gap:2px; padding:7px 0 0; }
+      .profile-menu button { width:100%; min-height:36px; padding:8px 10px; display:flex; align-items:center; gap:10px; border-radius:7px; color:#4f5e57; text-align:left; font-size:12px; }
+      .profile-menu button[hidden] { display:none; }
+      .profile-menu button:hover { background:#eef2ed; color:var(--ink); }
+      .profile-menu .menu-icon { width:18px; color:#7b8982; text-align:center; font-size:14px; }
+      .profile-menu .profile-logout { margin-top:5px; padding-top:10px; border-top:1px solid var(--line); border-radius:0 0 7px 7px; color:#a34d47; }
+      .dark .profile-popover,.dark .user-button { background:var(--paper); border-color:#46564e; }
+      .dark .profile-menu button:hover { background:#31423b; }
       .sidebar-actions { display:grid; gap:5px; margin:0 0 2px; } .sidebar-action { width:100%; min-height:40px; padding:9px 12px; border:1px solid #ffffff16; border-radius:6px; color:#dce5df; display:flex; align-items:center; gap:9px; text-align:left; font-weight:500; transition:background .18s,border-color .18s,color .18s; } .sidebar-action span { width:19px; height:19px; display:grid; place-items:center; border-radius:50%; background:#ffffff12; color:#cddbd1; font-size:16px; line-height:1; } .sidebar-action:hover { background:#ffffff16; border-color:#ffffff24; color:#fff; } .sidebar-action.import-action span { color:#f2bd92; background:#d8874b24; } .sidebar-action.note-action span { color:#b8d6c0; background:#8fb29824; } .page-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; } .batch-bar { display:flex; align-items:center; gap:10px; margin:-18px 0 24px; padding:10px 12px; border:1px solid #d9e2da; border-radius:7px; background:#f0f5f0; color:#526059; font-size:12px; } .batch-bar[hidden] { display:none; } .batch-bar span { margin-right:auto; font-weight:600; } .batch-bar button { padding:5px 8px; border-radius:5px; } .batch-bar .danger { color:#a74943; background:#fff1f0; } .batch-mode .doc-card { position:relative; padding-left:48px; } .batch-check { position:absolute; top:16px; left:16px; width:19px; height:19px; accent-color:#547c69; cursor:pointer; } .batch-mode .doc-card.selected { border-color:#6f9b84; box-shadow:0 0 0 2px #6f9b8430; }
-      @media (max-width:700px) { .top-actions { gap:2px; } .top-actions .user-button b { display:none; } .top-actions .logout-button { width:31px; height:31px; padding:0; font-size:0; } #changePasswordButton::after { content:'⌁'; font-size:17px; color:#53605c; } #logoutButton::after { content:'↪'; font-size:17px; color:#9a4a42; } }
+      @media (max-width:700px) { .profile-popover { position:fixed; top:68px; right:12px; width:min(290px,calc(100vw - 24px)); } }
       @media (max-width:700px) { .page-actions { justify-content:flex-start; } .batch-bar { flex-wrap:wrap; margin-top:-8px; } .batch-bar span { width:100%; } }
       .permission-note { margin:16px 0 0; padding:10px; border-radius:5px; background:#f2f4f0; color:var(--muted); font-size:12px; line-height:1.6; }
       .comment-section { max-width:1080px; margin:24px auto 0; padding:24px clamp(22px,4vw,42px); border:1px solid var(--line); border-radius:9px; background:var(--paper); box-shadow:var(--shadow); } .comment-heading { display:flex; align-items:baseline; gap:8px; margin:0 0 17px; } .comment-heading h2 { margin:0; font:700 19px 'Libre Baskerville','Noto Sans SC',serif; } .comment-heading span { color:var(--muted); font:11px 'DM Mono',monospace; } .comment-form textarea { width:100%; min-height:88px; padding:10px 12px; border:1px solid #d8ded7; border-radius:6px; resize:vertical; outline-color:var(--accent); color:var(--ink); background:transparent; } .comment-replying { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px; padding:7px 9px; border-radius:5px; background:#f4f6f2; color:#627068; font-size:12px; } .comment-replying button { padding:2px 5px; color:#66746d; font-size:11px; } .comment-form-footer { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:9px; color:var(--muted); font-size:11px; } .comment-submit { padding:7px 13px; border-radius:6px; background:var(--accent); color:#fff; font-weight:600; } .comment-submit:disabled { opacity:.55; cursor:not-allowed; } .comment-list { display:grid; gap:0; margin-top:22px; } .comment-item { padding:15px 0; border-top:1px solid var(--line); } .comment-reply-list { margin:0 0 0 clamp(18px,4vw,42px); padding-left:14px; border-left:2px solid #e7ece6; } .comment-item-head { display:flex; align-items:center; gap:9px; } .comment-avatar { width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#e5ede6; color:#496555; font-size:11px; font-weight:700; } .comment-author { font-size:13px; font-weight:600; } .comment-time { color:var(--muted); font-size:11px; } .comment-reply,.comment-delete { padding:4px 6px; border-radius:4px; font-size:11px; } .comment-reply { margin-left:auto; color:#61766b; } .comment-delete { color:#a74943; } .comment-reply:hover { background:#edf2ed; } .comment-delete:hover { background:#fff0ef; } .comment-content { margin:9px 0 0 35px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.75; font-size:13px; } .comment-deleted { color:var(--muted); font-style:italic; } .comment-empty,.comment-status { margin:8px 0; color:var(--muted); font-size:12px; } .dark .comment-section { background:var(--paper); } .dark .comment-form textarea { border-color:#46564e; } .dark .comment-replying { background:#20302b; } .dark .comment-avatar { background:#34483e; color:#c5dccb; } .dark .comment-reply:hover { background:#31443a; } .dark .comment-delete:hover { background:#542f2d; } .dark .comment-reply-list { border-color:#3c5147; }
@@ -133,13 +145,14 @@
         <header class="topbar">
           <button class="mobile-menu" id="mobileMenu">☰</button>
           <label class="search"><span>⌕</span><input id="searchInput" placeholder="搜索标题、内容或标签…" /><kbd>⌘ K</kbd></label>
-          <div class="top-actions"><button id="viewToggle" title="切换视图">☷</button><button id="themeToggle" title="切换主题">◐</button><button id="activityButton" title="操作记录">◷</button><button id="userButton" class="user-button" title="用户与权限"><span id="userAvatar">管</span><b id="userRole">管理员</b></button><button id="changePasswordButton" class="logout-button" type="button" title="修改密码" aria-label="修改密码" hidden>修改密码</button><button id="logoutButton" class="logout-button" type="button" title="退出登录" aria-label="退出登录" hidden>退出登录</button></div>
+          <div class="top-actions"><button id="themeToggle" type="button" title="切换显示主题" aria-label="切换显示主题">◐</button><button id="activityButton" type="button" title="操作记录" aria-label="操作记录">◷</button><div class="profile-wrap" id="profileWrap"><button id="userButton" class="user-button" type="button" title="个人中心" aria-label="打开个人中心" aria-haspopup="true" aria-expanded="false"><span id="userAvatar">管</span></button><section class="profile-popover" id="profilePopover" aria-label="个人中心" hidden><div class="profile-summary"><span class="profile-avatar-large" id="profileAvatar">管</span><div><strong id="profileName">管理员</strong><small id="userRole">管理员</small></div></div><div class="profile-menu"><button id="profileLocalSettings" type="button"><span class="menu-icon">◎</span>本地身份设置</button><button id="profileAccountsButton" type="button" hidden><span class="menu-icon">♙</span>账号管理</button><button id="changePasswordButton" type="button" hidden><span class="menu-icon">⌁</span>修改密码</button><button id="logoutButton" class="profile-logout" type="button" hidden><span class="menu-icon">↪</span>退出登录</button></div></section></div></div>
         </header>
         <section class="content-area" id="libraryView">
           <div class="page-heading"><div><p class="eyebrow">KNOWLEDGE BASE</p><h1 id="viewTitle">最近阅读</h1><p id="viewDescription">从上次停下的地方继续。</p></div></div>
           <div class="batch-bar" id="batchBar" hidden><span id="batchCount">已选 0 份</span><button type="button" id="batchSelectAll">全选当前结果</button><button type="button" id="batchDelete" class="danger" hidden>删除</button><button type="button" id="batchRestore" hidden>恢复资料</button><button type="button" id="batchCancel">完成</button></div>
           <div class="filter-row"><button class="filter active" data-filter="all">全部 <span id="allTotal">0</span></button><button class="filter" data-filter="document">文档</button><button class="filter" data-filter="sheet">表格</button><button class="filter" data-filter="pdf">PDF</button><button class="filter" data-filter="image">图片</button><div class="sort-wrap"><label>排序</label><select id="sortSelect"><option value="updated">最近更新</option><option value="title">标题 A–Z</option><option value="created">导入时间</option></select></div><button class="outline-button" id="batchToggle">编辑</button><div class="layout-options" aria-label="排列方式"><button class="layout-option active" data-layout="grid" title="卡片排列" aria-label="卡片排列"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button class="layout-option" data-layout="compact" title="紧凑排列" aria-label="紧凑排列"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="5" height="5" rx=".6"/><rect x="10" y="3" width="5" height="5" rx=".6"/><rect x="17" y="3" width="4" height="5" rx=".6"/><rect x="3" y="10" width="5" height="5" rx=".6"/><rect x="10" y="10" width="5" height="5" rx=".6"/><rect x="17" y="10" width="4" height="5" rx=".6"/><rect x="3" y="17" width="5" height="4" rx=".6"/><rect x="10" y="17" width="5" height="4" rx=".6"/><rect x="17" y="17" width="4" height="4" rx=".6"/></svg></button><button class="layout-option" data-layout="list" title="单行排列" aria-label="单行排列"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5h13M8 12h13M8 19h13"/><circle cx="4" cy="5" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="19" r="1"/></svg></button></div></div>
           <div class="document-grid" id="documentGrid"></div>
+          <button class="load-more-docs" id="loadMoreDocs" type="button" hidden>继续显示</button>
           <div class="empty-state" id="emptyState" hidden><div class="empty-icon">⌑</div><h2>还没有资料</h2><p>拖入文件，或点击“导入资料”开始建立你的知识库。</p><button class="outline-button" id="emptyImport">导入第一份资料</button></div>
         </section>
         <section class="reader" id="readerView" hidden>
@@ -155,23 +168,24 @@
     <dialog id="importDialog"><form method="dialog" id="importForm"><div class="dialog-head"><h2 id="importDialogTitle">导入资料</h2><button value="cancel">×</button></div><p id="importFileSummary" class="import-summary"></p><label>导入到分类<select id="importCategory"></select></label><label>标签 <span>用逗号分隔，可选，将应用到全部文件</span><input id="importTags" maxlength="120" placeholder="例如：PMSM, 设计规范" /></label><div class="dialog-actions"><button value="cancel" class="text-button">取消</button><button value="default" class="import-button">确认导入</button></div></form></dialog>
     <dialog id="categoryDialog"><form id="categoryForm"><div class="dialog-head"><h2>新建分类</h2><button type="button" id="closeCategory" aria-label="关闭">×</button></div><label>分类名称<input id="categoryName" required maxlength="40" placeholder="例如：产品规范" /></label><label>分类颜色<input id="categoryColor" type="color" value="#8c9d7e" /></label><div class="dialog-actions"><button type="button" id="cancelCategory" class="text-button">取消</button><button type="submit" class="import-button">创建分类</button></div></form></dialog>
     <dialog id="userDialog"><form id="userForm"><div class="dialog-head"><h2>用户与权限</h2><button type="button" id="closeUser" aria-label="关闭">×</button></div><label>显示名称<input id="userName" required maxlength="20" placeholder="请输入名称" /></label><label>角色<select id="userRoleSelect"><option value="admin">管理员：完整管理权限</option><option value="editor">编辑者：可导入、编辑与删除</option><option value="viewer">只读访客：仅浏览与搜索</option></select></label><p class="permission-note">此为本地单用户权限模式。生产环境应接入服务端登录、会话与权限校验。</p><div class="dialog-actions"><button type="button" id="serverLogout" class="text-button" hidden>退出登录</button><button type="button" id="cancelUser" class="text-button">取消</button><button type="submit" class="import-button">保存设置</button></div></form></dialog>
-    <dialog id="passwordDialog"><form id="passwordForm"><div class="dialog-head"><h2>修改我的密码</h2><button type="button" id="closePassword" aria-label="关闭">×</button></div><p class="permission-note">密码至少 6 位。修改后，其他已登录设备会自动退出。</p><label>当前密码<input id="currentPassword" type="password" required minlength="6" autocomplete="current-password" /></label><label>新密码<input id="newPassword" type="password" required minlength="6" autocomplete="new-password" /></label><label>确认新密码<input id="confirmPassword" type="password" required minlength="6" autocomplete="new-password" /></label><div class="dialog-actions"><button type="button" id="cancelPassword" class="text-button">取消</button><button type="submit" class="import-button">保存新密码</button></div></form></dialog>
-    <dialog id="accountsDialog"><form id="accountsForm"><div class="dialog-head"><h2>账号管理</h2><button type="button" id="closeAccounts" aria-label="关闭">×</button></div><div id="accountsList" class="accounts-list"></div><div class="dialog-actions"><button type="button" id="resetAllPasswords" class="text-button">全部重置为 888888</button></div><hr><h3>新增账号</h3><label>用户名<input id="accountName" required pattern="[A-Za-z0-9_.-]{3,32}" maxlength="32" /></label><label>初始密码<input id="accountPassword" type="password" required minlength="6" value="888888" /></label><label>角色<select id="accountRole"><option value="viewer">只读访客</option><option value="editor">编辑者</option><option value="admin">管理员</option></select></label><div class="dialog-actions"><button type="submit" class="import-button">创建账号</button></div></form></dialog>
+    <dialog id="passwordDialog"><form id="passwordForm"><div class="dialog-head"><h2>修改我的密码</h2><button type="button" id="closePassword" aria-label="关闭">×</button></div><p class="permission-note">密码需为 6-128 位。修改后，其他已登录设备会自动退出。</p><label>当前密码<input id="currentPassword" type="password" required minlength="6" maxlength="128" autocomplete="current-password" /></label><label>新密码<input id="newPassword" type="password" required minlength="6" maxlength="128" autocomplete="new-password" /></label><label>确认新密码<input id="confirmPassword" type="password" required minlength="6" maxlength="128" autocomplete="new-password" /></label><div class="dialog-actions"><button type="button" id="cancelPassword" class="text-button">取消</button><button type="submit" class="import-button">保存新密码</button></div></form></dialog>
+    <dialog id="accountsDialog"><form id="accountsForm"><div class="dialog-head"><h2>账号管理</h2><button type="button" id="closeAccounts" aria-label="关闭">×</button></div><div id="accountsList" class="accounts-list"></div><div class="dialog-actions"><button type="button" id="resetAllPasswords" class="text-button">全部重置为 888888</button></div><hr><h3>新增账号</h3><label>用户名<input id="accountName" required pattern="[A-Za-z0-9_.-]{3,32}" maxlength="32" /></label><label>初始密码<input id="accountPassword" type="password" required minlength="6" maxlength="128" value="888888" /></label><label>角色<select id="accountRole"><option value="viewer">只读访客</option><option value="editor">编辑者</option><option value="admin">管理员</option></select></label><div class="dialog-actions"><button type="submit" class="import-button">创建账号</button></div></form></dialog>
+    <dialog id="accountPasswordDialog"><form id="accountPasswordForm"><div class="dialog-head"><h2>重设账号密码</h2><button type="button" id="closeAccountPassword" aria-label="关闭">×</button></div><p id="accountPasswordTarget" class="permission-note"></p><label>新密码<input id="accountPasswordNew" type="password" required minlength="6" maxlength="128" autocomplete="new-password" /></label><label>确认新密码<input id="accountPasswordConfirm" type="password" required minlength="6" maxlength="128" autocomplete="new-password" /></label><div class="dialog-actions"><button type="button" id="cancelAccountPassword" class="text-button">取消</button><button type="submit" class="import-button">确认重设</button></div></form></dialog>
     <dialog id="editDocDialog"><form id="editDocForm"><div class="dialog-head"><h2>编辑资料</h2><button type="button" id="closeEditDoc" aria-label="关闭">×</button></div><label>标题<input id="editDocTitle" required maxlength="120" /></label><label>分类<select id="editDocCategory"></select></label><label>标签 <span>用逗号分隔，可选</span><input id="editDocTags" maxlength="120" /></label><div class="dialog-actions"><button type="button" id="cancelEditDoc" class="text-button">取消</button><button type="submit" class="import-button">保存修改</button></div></form></dialog>
     <dialog id="activityDialog"><div class="dialog-head"><h2>操作记录</h2><button type="button" id="closeActivity" aria-label="关闭">×</button></div><div id="activityList" class="activity-list"></div></dialog>
     <dialog id="localLoginDialog" class="login-dialog"><form id="localLoginForm" class="login-layout"><section class="login-visual"><div class="login-brand"><span class="brand-mark">HD</span><span><strong>HD MOTORS</strong><small>设计知识库</small></span></div><div class="login-intro"><span class="login-eyebrow">DESIGN KNOWLEDGE BASE</span><h1>让每一份设计资料<br />都有序、可查、可传承。</h1><p>标准、手册、企业资料和经验笔记在同一处沉淀，支持全文阅读与分类管理。</p></div><div class="login-points"><span>01 统一资料库</span><span>02 服务端账号</span><span>03 分级权限</span></div></section><section class="login-panel"><span class="eyebrow">LAN CONNECTION</span><h2>连接知识库</h2><p class="permission-note">账号由局域网服务验证。请填写运行服务的电脑地址。</p><label>服务器地址<input id="localServerAddress" required inputmode="url" value="http://127.0.0.1:8787" placeholder="例如：http://192.168.1.20:8787" /></label><button type="submit" class="import-button login-submit">前往登录</button><small class="login-security">请使用局域网服务器地址访问，以启用账号、权限与资料同步。</small></section></form></dialog>
-    <dialog id="serverAuthDialog" class="login-dialog"><form id="serverAuthForm" class="login-layout"><section class="login-visual"><div class="login-brand"><span class="brand-mark">HD</span><span><strong>HD MOTORS</strong><small>设计知识库</small></span></div><div class="login-intro"><span class="login-eyebrow">2026 DESIGN KNOWLEDGE</span><h1>让每一份设计资料<br />都有序、可查、可传承。</h1><p>把国家标准、行业标准、设计手册与企业经验沉淀为团队可持续使用的设计资产。</p></div><div class="login-points"><span>01 独立账号</span><span>02 服务端权限</span><span>03 局域网同步</span></div></section><section class="login-panel"><span class="eyebrow">SECURE ACCESS</span><h2 id="serverAuthTitle">登录知识库</h2><p id="serverAuthHint" class="permission-note">请输入本人账号和登录密码。</p><label>登录账号<input id="serverAuthUser" required minlength="3" maxlength="32" autocomplete="username" placeholder="例如：zhangyu" /></label><label class="login-password">登录密码<input id="serverAuthPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="请输入登录密码" /><button type="button" id="toggleAuthPassword" class="password-toggle" aria-label="显示密码">显示</button></label><p id="serverAuthError" class="auth-error" aria-live="polite" hidden></p><button type="submit" class="import-button login-submit" id="serverAuthSubmit">登录</button><small class="login-security">账号和密码仅用于本局域网身份验证；如遗忘密码，请联系系统管理员重置。</small></section></form></dialog>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mammoth/mammoth.browser.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/css/pptxjs.css" />
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/jquery-1.11.3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/filereader.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/d3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/nv.d3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/meshesha/PPTXjs@master/js/pptxjs.js"></script>
+    <dialog id="serverAuthDialog" class="login-dialog"><form id="serverAuthForm" class="login-layout"><section class="login-visual"><div class="login-brand"><span class="brand-mark">HD</span><span><strong>HD MOTORS</strong><small>设计知识库</small></span></div><div class="login-intro"><span class="login-eyebrow">2026 DESIGN KNOWLEDGE</span><h1>让每一份设计资料<br />都有序、可查、可传承。</h1><p>把国家标准、行业标准、设计手册与企业经验沉淀为团队可持续使用的设计资产。</p></div><div class="login-points"><span>01 独立账号</span><span>02 服务端权限</span><span>03 局域网同步</span></div></section><section class="login-panel"><span class="eyebrow">SECURE ACCESS</span><h2 id="serverAuthTitle">登录知识库</h2><p id="serverAuthHint" class="permission-note">请输入本人账号和登录密码。</p><label>登录账号<input id="serverAuthUser" required minlength="3" maxlength="32" autocomplete="username" placeholder="例如：zhangyu" /></label><label class="login-password">登录密码<input id="serverAuthPassword" type="password" required minlength="6" maxlength="128" autocomplete="current-password" placeholder="请输入登录密码" /><button type="button" id="toggleAuthPassword" class="password-toggle" aria-label="显示密码">显示</button></label><p id="serverAuthError" class="auth-error" aria-live="polite" hidden></p><button type="submit" class="import-button login-submit" id="serverAuthSubmit">登录</button><small class="login-security">账号和密码仅用于本局域网身份验证；如遗忘密码，请联系系统管理员重置。</small></section></form></dialog>
+    <script src="/vendor/marked.js?v=20260719b"></script>
+    <script src="/vendor/mammoth.js?v=20260719b"></script>
+    <script src="/vendor/xlsx.js?v=20260719b"></script>
+    <link rel="stylesheet" href="/vendor/nvd3.css?v=20260719b" />
+    <link rel="stylesheet" href="/vendor/pptxjs/pptxjs.css?v=20260719b" />
+    <script src="/vendor/jquery.js?v=20260719b"></script>
+    <script src="/vendor/pptxjs/jszip.js?v=20260719b"></script>
+    <script src="/vendor/pptxjs/filereader.js?v=20260719b"></script>
+    <script src="/vendor/d3.js?v=20260719b"></script>
+    <script src="/vendor/nvd3.js?v=20260719b"></script>
+    <script src="/vendor/pptxjs/pptxjs.js?v=20260719b"></script>
     <script src="app.js"></script>
     <script>
       const requestedQuery = new URLSearchParams(window.location.search).get('q');
@@ -243,7 +257,16 @@
         if (Array.isArray(saved?.trash)) { trash = saved.trash; renderDocs(); }
         if (Array.isArray(saved?.activities)) activities = saved.activities;
       });
-      document.querySelector('#userButton').onclick = () => {
+      const profileWrap = document.querySelector('#profileWrap'), profilePopover = document.querySelector('#profilePopover'), userButton = document.querySelector('#userButton');
+      const closeProfile = () => { profilePopover.hidden = true; userButton.setAttribute('aria-expanded', 'false'); };
+      userButton.onclick = event => {
+        event.stopPropagation(); const opening = profilePopover.hidden; profilePopover.hidden = !opening; userButton.setAttribute('aria-expanded', String(opening));
+      };
+      document.addEventListener('click', event => { if (!profileWrap.contains(event.target)) closeProfile(); });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape') closeProfile(); });
+      document.querySelector('#themeToggle').addEventListener('click', closeProfile);
+      document.querySelector('#profileLocalSettings').onclick = () => {
+        closeProfile();
         document.querySelector('#userName').value = currentUser.name;
         document.querySelector('#userRoleSelect').value = currentUser.role;
         document.querySelector('#userDialog').showModal();
@@ -260,6 +283,7 @@
         document.querySelector('#userDialog').close(); applyPermissions(); notify('用户权限设置已更新', 'success');
       });
       document.querySelector('#activityButton').onclick = async () => {
+        closeProfile();
         const list = document.querySelector('#activityList');
         if (isLanMode) {
           try {
@@ -314,19 +338,20 @@
         document.querySelector('#userRoleSelect').disabled = true;
         document.querySelector('#userForm button[type="submit"]').hidden = true;
         document.querySelector('#serverLogout').hidden = false;
+        document.querySelector('#profileLocalSettings').hidden = true;
         document.querySelector('#changePasswordButton').hidden = false;
         document.querySelector('#logoutButton').hidden = false;
+        document.querySelector('#profileAccountsButton').hidden = currentUser.role !== 'admin';
         document.querySelector('#userDialog .permission-note').textContent = '局域网账号与权限由服务器管理。';
-        if (currentUser.role === 'admin') document.querySelector('#userButton').onclick = openAccounts;
       }
       const signOut = async () => {
         try { await remoteRequest('/api/auth/logout', {method:'POST'}); localStorage.removeItem(userKey); location.replace('/login.html'); }
         catch (error) { notify(error.message || '退出登录失败', 'warn'); }
       };
       document.querySelector('#serverLogout').onclick = signOut;
-      document.querySelector('#logoutButton').onclick = signOut;
+      document.querySelector('#logoutButton').onclick = () => { closeProfile(); signOut(); };
       const passwordDialog = document.querySelector('#passwordDialog');
-      document.querySelector('#changePasswordButton').onclick = () => { document.querySelector('#passwordForm').reset(); passwordDialog.showModal(); setTimeout(() => document.querySelector('#currentPassword').focus(), 0); };
+      document.querySelector('#changePasswordButton').onclick = () => { closeProfile(); document.querySelector('#passwordForm').reset(); passwordDialog.showModal(); setTimeout(() => document.querySelector('#currentPassword').focus(), 0); };
       document.querySelector('#closePassword').onclick = document.querySelector('#cancelPassword').onclick = () => passwordDialog.close();
       document.querySelector('#passwordForm').addEventListener('submit', async event => {
         event.preventDefault(); const currentPassword = document.querySelector('#currentPassword').value, newPassword = document.querySelector('#newPassword').value;
@@ -338,9 +363,10 @@
         try { await refreshAccounts(); document.querySelector('#accountsDialog').showModal(); }
         catch (error) { notify(error.message || '账号列表加载失败', 'warn'); }
       }
+      document.querySelector('#profileAccountsButton').onclick = () => { closeProfile(); openAccounts(); };
       async function refreshAccounts() {
         const data = await remoteRequest('/api/users');
-        document.querySelector('#accountsList').innerHTML = data.users.map(user => `<div class="account-row"><strong>${escapeHtml(user.username)}</strong><span><select data-account-role="${user.id}" ${user.username===currentUser.name?'disabled':''}><option value="admin" ${user.role==='admin'?'selected':''}>管理员</option><option value="editor" ${user.role==='editor'?'selected':''}>编辑者</option><option value="viewer" ${user.role==='viewer'?'selected':''}>只读访客</option></select><button type="button" class="text-button" data-account-password="${user.id}">重设密码</button></span></div>`).join('');
+        document.querySelector('#accountsList').innerHTML = data.users.map(user => `<div class="account-row${user.disabled_at?' account-disabled':''}"><strong>${escapeHtml(user.username)}${user.disabled_at?'<small>已停用</small>':''}</strong><span><select data-account-role="${user.id}" ${user.username===currentUser.name||user.disabled_at?'disabled':''}><option value="admin" ${user.role==='admin'?'selected':''}>管理员</option><option value="editor" ${user.role==='editor'?'selected':''}>编辑者</option><option value="viewer" ${user.role==='viewer'?'selected':''}>只读访客</option></select><button type="button" class="text-button" data-account-password="${user.id}" data-account-name="${escapeHtml(user.username)}">重设密码</button><button type="button" class="text-button" data-account-disabled="${user.id}" data-disabled-value="${user.disabled_at?'false':'true'}" ${user.username===currentUser.name?'disabled':''}>${user.disabled_at?'启用':'停用'}</button></span></div>`).join('');
       }
       document.querySelector('#closeAccounts').onclick = () => document.querySelector('#accountsDialog').close();
       document.querySelector('#accountsList').addEventListener('change', async event => {
@@ -349,11 +375,13 @@
         catch (error) { notify(error.message || '角色更新失败', 'warn'); await refreshAccounts(); }
       });
       document.querySelector('#accountsList').addEventListener('click', async event => {
+        const stateButton = event.target.closest('[data-account-disabled]');
+        if (stateButton) { const disabling=stateButton.dataset.disabledValue==='true'; if(disabling&&!confirm('停用后该账号会立即退出，且无法再次登录。确定继续？'))return; try{await remoteRequest(`/api/users/${stateButton.dataset.accountDisabled}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disabled:disabling})});await refreshAccounts();notify(disabling?'账号已停用':'账号已启用','success')}catch(error){notify(error.message||'账号状态更新失败','warn')} return; }
         const button = event.target.closest('[data-account-password]'); if (!button) return;
-        const password = prompt('请输入新密码（至少 6 位）', '888888'); if (!password) return;
-        try { await remoteRequest(`/api/users/${button.dataset.accountPassword}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({password}) }); notify('密码已重设', 'success'); }
-        catch (error) { notify(error.message || '密码重设失败', 'warn'); }
+        const dialog=document.querySelector('#accountPasswordDialog');dialog.dataset.accountId=button.dataset.accountPassword;document.querySelector('#accountPasswordTarget').textContent=`正在为“${button.dataset.accountName}”重设密码`;document.querySelector('#accountPasswordForm').reset();dialog.showModal();setTimeout(()=>document.querySelector('#accountPasswordNew').focus(),0);
       });
+      document.querySelector('#closeAccountPassword').onclick=document.querySelector('#cancelAccountPassword').onclick=()=>document.querySelector('#accountPasswordDialog').close();
+      document.querySelector('#accountPasswordForm').addEventListener('submit',async event=>{event.preventDefault();const dialog=document.querySelector('#accountPasswordDialog'),password=document.querySelector('#accountPasswordNew').value;if(password!==document.querySelector('#accountPasswordConfirm').value)return notify('两次输入的新密码不一致','warn');try{await remoteRequest(`/api/users/${dialog.dataset.accountId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});dialog.close();notify('密码已重设','success')}catch(error){notify(error.message||'密码重设失败','warn')}});
       document.querySelector('#accountsForm').addEventListener('submit', async event => {
         event.preventDefault();
         try { await remoteRequest('/api/users', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.querySelector('#accountName').value.trim(), password:document.querySelector('#accountPassword').value, role:document.querySelector('#accountRole').value}) }); event.target.reset(); await refreshAccounts(); notify('账号已创建', 'success'); }
