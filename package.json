@@ -1,12 +1,28 @@
 {
   "name": "hd-motors-knowledge-base",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "HOST=0.0.0.0 node server.mjs",
-    "test": "node tests/api-smoke.mjs"
+    "start:lan": "cross-env HOST=0.0.0.0 node server.mjs",
+    "dev": "cross-env HOST=0.0.0.0 node server.mjs",
+    "test": "node tests/static-smoke.mjs && node tests/api-smoke.mjs && node tests/capacity-smoke.mjs && node tests/backup-smoke.mjs",
+    "check": "node --check server.mjs && node --check app.js && node --check vendor/pptxjs/js/pptxjs.js && node --check scripts/backup.mjs && node --check scripts/restore-backup.mjs && node --check scripts/system-check.mjs && node --check tests/capacity-smoke.mjs && npm test",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore-backup.mjs",
+    "doctor": "node scripts/system-check.mjs"
   },
-  "engines": { "node": ">=25" }
+  "engines": { "node": ">=24.18.0 <25" },
+  "dependencies": {
+    "cross-env": "10.0.0",
+    "d3": "3.5.17",
+    "jquery": "3.7.1",
+    "jszip": "3.10.1",
+    "mammoth": "1.12.0",
+    "marked": "18.0.6",
+    "nvd3": "1.8.6",
+    "pdfjs-dist": "4.10.38",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
 }
