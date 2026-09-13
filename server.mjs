@@ -4,9 +4,9 @@
  */
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { mkdir, unlink, stat, rename } from 'node:fs/promises';
+import { mkdir, unlink, stat, rename, readdir } from 'node:fs/promises';
 import { createReadStream, createWriteStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { join, extname, normalize, resolve, dirname } from 'node:path';
+import { join, extname, resolve, dirname } from 'node:path';
 import { Readable } from 'node:stream';
 import { createGzip, constants as zlibConstants } from 'node:zlib';
 import { DatabaseSync } from 'node:sqlite';
@@ -14,7 +14,16 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolve(process.env.DATA_DIR || join(ROOT, 'data'));
+const APP_VERSION = JSON.parse(readFileSync(join(ROOT,'package.json'),'utf8')).version;
+const DATA_DIR = (() => {
+  const configured=String(process.env.DATA_DIR||'').trim();
+  if(configured)return resolve(configured);
+  const projectData=resolve(join(ROOT,'data'));
+  if(process.platform!=='win32')return projectData;
+  const productionData='D:\\HDKnowledgeBaseData';
+  if(existsSync(join(productionData,'knowledge.db'))||existsSync(productionData))return productionData;
+  return projectData;
+})();
 await mkdir(DATA_DIR, { recursive: true });
 const ATTACHMENT_DIR = join(DATA_DIR, 'attachments');
 await mkdir(ATTACHMENT_DIR, { recursive: true });
@@ -80,10 +89,25 @@ if (!db.prepare("PRAGMA table_info(users)").all().some(column => column.name ===
 if (!db.prepare("PRAGMA table_info(documents)").all().some(column => column.name === 'created_by')) db.exec("ALTER TABLE documents ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
 if (!db.prepare("PRAGMA table_info(document_comments)").all().some(column => column.name === 'parent_id')) db.exec('ALTER TABLE document_comments ADD COLUMN parent_id INTEGER REFERENCES document_comments(id) ON DELETE SET NULL');
 if (!db.prepare("PRAGMA table_info(document_comments)").all().some(column => column.name === 'deleted_at')) db.exec('ALTER TABLE document_comments ADD COLUMN deleted_at TEXT');
+const defaultCategories=[{name:'国家标准',color:'#c56a55'},{name:'行业标准',color:'#738dae'},{name:'设计手册',color:'#6f9b84'},{name:'企业标准',color:'#9777a8'},{name:'未定义',color:'#8c9692'}];
+const categoryCount=Number(db.prepare('SELECT COUNT(*) AS value FROM categories').get().value);
+if(categoryCount===0){const insert=db.prepare('INSERT INTO categories(name,color,created_at,sort_order) VALUES(?,?,?,?)');defaultCategories.forEach((category,index)=>insert.run(category.name,category.color,new Date().toISOString(),index+1))}
+else if(!db.prepare('SELECT 1 FROM categories WHERE name=?').get('未定义')){const sortOrder=Number(db.prepare('SELECT COALESCE(MAX(sort_order),0) AS value FROM categories').get().value)+1;db.prepare('INSERT INTO categories(name,color,created_at,sort_order) VALUES(?,?,?,?)').run('未定义','#8c9692',new Date().toISOString(),sortOrder)}
 db.exec('UPDATE categories SET sort_order=rowid WHERE sort_order=0');
 db.exec("UPDATE documents SET created_by='系统迁移' WHERE created_by IS NULL OR created_by=''");
 const integrityResult = Object.values(db.prepare('PRAGMA quick_check').get() || {})[0];
 if (integrityResult !== 'ok') throw new Error(`数据库完整性检查失败：${integrityResult || '未知错误'}`);
+const recoverInterruptedPurges = async () => {
+  const entries=await readdir(ATTACHMENT_DIR,{withFileTypes:true});
+  for(const entry of entries){
+    if(!entry.isFile())continue;
+    const match=entry.name.match(/^\.([\w-]{1,128})\.[a-f0-9-]{36}\.purge$/i);
+    if(!match)continue;
+    const id=match[1],temporary=join(ATTACHMENT_DIR,entry.name),source=join(ATTACHMENT_DIR,id),documentExists=Boolean(db.prepare('SELECT 1 FROM documents WHERE id=?').get(id));
+    try{if(documentExists&&!existsSync(source))await rename(temporary,source);else await unlink(temporary);console.warn(`已恢复永久删除中断留下的附件：${id}`)}catch(error){console.error('恢复中断的永久删除失败',temporary,error);throw error}
+  }
+};
+await recoverInterruptedPurges();
 
 const mime = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.mjs':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8' };
 const staticFiles = new Map([
@@ -129,6 +153,49 @@ const documentListRows = (userId,deleted=false) => db.prepare(`
 const sessionUser = req => { const id = parseCookies(req.headers.cookie).sid; if (!id) return null; const row = db.prepare('SELECT u.id,u.username,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.expires_at>? AND u.disabled_at IS NULL').get(id, Date.now()); return row || null; };
 const audit = (user, action, target='') => db.prepare('INSERT INTO audit_log(user_id,action,target,created_at) VALUES(?,?,?,?)').run(user?.id || null, action, target, now());
 const runTransaction = callback => { db.exec('BEGIN IMMEDIATE'); try{const result=callback();db.exec('COMMIT');return result}catch(error){db.exec('ROLLBACK');throw error} };
+const parseBatchIds = value => {
+  if(!Array.isArray(value)||value.length===0)throw httpError(400,'请选择资料');
+  if(value.length>100)throw httpError(413,'单次最多处理 100 份资料');
+  const ids=[...new Set(value.map(id=>String(id)))];
+  if(ids.some(id=>!/^[\w-]{1,128}$/.test(id)))throw httpError(400,'资料编号无效');
+  return ids;
+};
+const stageAttachmentsForPurge = async ids => {
+  const staged=[];
+  try{
+    for(const id of ids){
+      const source=join(ATTACHMENT_DIR,id);
+      if(!existsSync(source))continue;
+      const temporary=join(ATTACHMENT_DIR,`.${id}.${randomUUID()}.purge`);
+      await rename(source,temporary);
+      staged.push({id,source,temporary});
+    }
+    return staged;
+  }catch(error){
+    await Promise.allSettled(staged.map(file=>rename(file.temporary,file.source)));
+    throw error;
+  }
+};
+const purgeDocuments = async (user,ids) => {
+  const rows=ids.map(id=>db.prepare('SELECT id,title FROM documents WHERE id=? AND deleted_at IS NOT NULL').get(id)).filter(Boolean);
+  if(!rows.length)return 0;
+  const staged=await stageAttachmentsForPurge(rows.map(row=>row.id));
+  const purged=[];
+  try{
+    runTransaction(()=>{
+      const removeDocument=db.prepare('DELETE FROM documents WHERE id=? AND deleted_at IS NOT NULL');
+      const removeAttachment=db.prepare('DELETE FROM attachment_files WHERE id=?');
+      rows.forEach(row=>{if(Number(removeDocument.run(row.id).changes)){removeAttachment.run(row.id);purged.push(row)}});
+      if(purged.length)audit(user,purged.length===1?'永久删除资料':'批量永久删除资料',purged.length===1?purged[0].title:`${purged.length} 份资料`);
+    });
+  }catch(error){
+    await Promise.allSettled(staged.map(file=>rename(file.temporary,file.source)));
+    throw error;
+  }
+  const purgedIds=new Set(purged.map(row=>row.id));
+  for(const file of staged)try{if(purgedIds.has(file.id))await unlink(file.temporary);else await rename(file.temporary,file.source)}catch(error){console.error('永久删除后的附件整理失败',file.temporary,error)}
+  return purged.length;
+};
 const requireRole = (req, res, roles) => { const user = sessionUser(req); if (!user) { send(res,401,{error:'请先登录'}); return null; } if (!roles.includes(user.role)) { send(res,403,{error:'权限不足'}); return null; } return user; };
 const loginKey = (req, username) => `${req.socket.remoteAddress || 'unknown'}:${String(username || '').toLowerCase()}`;
 const loginBlocked = key => { const state=loginAttempts.get(key); return Boolean(state?.until && state.until>Date.now()); };
@@ -143,7 +210,7 @@ const requestHandler = async (req, res) => {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     if (!validMutationOrigin(req)) return send(res,403,{error:'请求来源无效，请刷新页面后重试'});
-    if (req.method === 'GET' && url.pathname === '/api/health') { db.prepare('SELECT 1').get(); return send(res,200,{ok:true,status:'healthy',maintenance:maintenanceActive(),activeMutations,uptimeSeconds:Math.floor(process.uptime())}); }
+    if (req.method === 'GET' && url.pathname === '/api/health') { db.prepare('SELECT 1').get(); return send(res,200,{ok:true,status:'healthy',version:APP_VERSION,maintenance:maintenanceActive(),activeMutations,uptimeSeconds:Math.floor(process.uptime())}); }
     if (!['GET','HEAD','OPTIONS'].includes(req.method||'')) { if(maintenanceActive())return send(res,503,{error:'系统正在执行备份，请稍后重试'},{'Retry-After':'30'}); activeMutations++;countedMutation=true; }
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html') && !sessionUser(req)) {
       const next = `${url.pathname}${url.search}`;
@@ -155,7 +222,7 @@ const requestHandler = async (req, res) => {
       const { username, password } = await readBody(req);
       if (!/^[\w.-]{3,32}$/.test(username || '') || String(password || '').length < 6 || String(password || '').length>128) return send(res,400,{error:'用户名需为 3-32 位；密码需为 6-128 位'});
       if (db.prepare('SELECT 1 FROM users LIMIT 1').get()) return send(res,409,{error:'管理员已初始化'});
-      const sid=randomBytes(32).toString('hex'),result=runTransaction(()=>{if(db.prepare('SELECT 1 FROM users LIMIT 1').get())throw httpError(409,'管理员已初始化');const created=db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)').run(username,hashPassword(password),'admin',now());db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at) VALUES(?,?,?,?)').run(sid,created.lastInsertRowid,Date.now()+7*864e5,now());for(const [index,category] of [{name:'国家标准',color:'#c56a55'},{name:'行业标准',color:'#738dae'},{name:'设计手册',color:'#6f9b84'},{name:'企业标准',color:'#9777a8'},{name:'未定义',color:'#8c9692'}].entries())db.prepare('INSERT OR IGNORE INTO categories(name,color,created_at,sort_order) VALUES(?,?,?,?)').run(category.name,category.color,now(),index+1);audit({id:created.lastInsertRowid},'初始化管理员',username);return created}); return send(res,201,{user:{id:Number(result.lastInsertRowid),username,role:'admin'}},{'Set-Cookie':sessionCookie(req,sid)});
+      const sid=randomBytes(32).toString('hex'),result=runTransaction(()=>{if(db.prepare('SELECT 1 FROM users LIMIT 1').get())throw httpError(409,'管理员已初始化');const created=db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)').run(username,hashPassword(password),'admin',now());db.prepare('INSERT INTO sessions(id,user_id,expires_at,created_at) VALUES(?,?,?,?)').run(sid,created.lastInsertRowid,Date.now()+7*864e5,now());for(const [index,category] of defaultCategories.entries())db.prepare('INSERT OR IGNORE INTO categories(name,color,created_at,sort_order) VALUES(?,?,?,?)').run(category.name,category.color,now(),index+1);audit({id:created.lastInsertRowid},'初始化管理员',username);return created}); return send(res,201,{user:{id:Number(result.lastInsertRowid),username,role:'admin'}},{'Set-Cookie':sessionCookie(req,sid)});
     }
     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
       const { username,password } = await readBody(req); const key=loginKey(req,username); if(loginBlocked(key))return send(res,429,{error:'尝试次数过多，请 5 分钟后再试'}); if(String(password||'').length>128){loginFailed(key);return send(res,401,{error:'用户名或密码错误'})} const user=db.prepare('SELECT * FROM users WHERE username=?').get(username);
@@ -193,7 +260,7 @@ const requestHandler = async (req, res) => {
       if(!clean||clean.length>40||!/^#[0-9a-fA-F]{6}$/.test(String(color||'')))return send(res,400,{error:'请填写分类名称和颜色'});
       try { const sortOrder=Number(db.prepare('SELECT COALESCE(MAX(sort_order),0) AS value FROM categories').get().value)+1; db.prepare('INSERT INTO categories(name,color,created_at,sort_order) VALUES(?,?,?,?)').run(clean,color,now(),sortOrder); audit(user,'创建分类',clean); return send(res,201,{category:{name:clean,color}}); } catch { return send(res,409,{error:'分类已存在'}); }
     }
-    if (req.method === 'PUT' && url.pathname === '/api/categories/order') { const user=requireRole(req,res,['admin']); if(!user)return; const {order}=await readBody(req); if(!Array.isArray(order))return send(res,400,{error:'分类排序数据无效'}); const names=db.prepare('SELECT name FROM categories').all().map(row=>row.name); if(order.length!==names.length||new Set(order).size!==names.length||order.some(name=>!names.includes(name)))return send(res,400,{error:'分类排序不完整'}); const update=db.prepare('UPDATE categories SET sort_order=? WHERE name=?'); runTransaction(()=>{order.forEach((name,index)=>update.run(index+1,name));audit(user,'调整分类顺序',order.join('、'))}); return send(res,200,{ok:true}); }
+    if (req.method === 'PUT' && url.pathname === '/api/categories/order') { const user=requireRole(req,res,['admin']); if(!user)return; const {order,expectedOrder}=await readBody(req); if(!Array.isArray(order))return send(res,400,{error:'分类排序数据无效'}); const names=db.prepare('SELECT name FROM categories ORDER BY sort_order,name').all().map(row=>row.name); if(order.length!==names.length||new Set(order).size!==names.length||order.some(name=>!names.includes(name)))return send(res,400,{error:'分类排序不完整'}); if(expectedOrder!==undefined&&(!Array.isArray(expectedOrder)||expectedOrder.length!==names.length||expectedOrder.some((name,index)=>name!==names[index])))return send(res,409,{error:'分类列表已被其他管理员更新，请刷新后重试'}); const update=db.prepare('UPDATE categories SET sort_order=? WHERE name=?'); runTransaction(()=>{order.forEach((name,index)=>update.run(index+1,name));audit(user,'调整分类顺序',order.join('、'))}); return send(res,200,{ok:true,order}); }
     const categoryMatch=url.pathname.match(/^\/api\/categories\/(.+)$/);
     if (categoryMatch && req.method === 'DELETE') {
       const user=requireRole(req,res,['admin']); if(!user)return; const name=safeDecode(categoryMatch[1]);
@@ -254,12 +321,15 @@ const requestHandler = async (req, res) => {
       if(comment.deleted_at)return send(res,404,{error:'评论已删除'}); db.prepare('UPDATE document_comments SET content=?,deleted_at=? WHERE id=?').run('',now(),comment.id); audit(user,'删除评论',comment.title); return send(res,200,{ok:true});
     }
     if (req.method === 'POST' && url.pathname === '/api/documents/batch-delete') {
-      const user=requireRole(req,res,['admin','editor']); if(!user)return; const {ids}=await readBody(req); const clean=[...new Set(Array.isArray(ids)?ids.filter(id=>/^[\w-]+$/.test(String(id))).slice(0,100):[])];
-      if(!clean.length)return send(res,400,{error:'请选择要删除的资料'}); const update=db.prepare('UPDATE documents SET deleted_at=?,updated_at=? WHERE id=? AND deleted_at IS NULL'); let count=0; runTransaction(()=>{clean.forEach(id=>{const timestamp=now();count+=Number(update.run(timestamp,timestamp,id).changes)});audit(user,'批量移入回收站',`${count} 份资料`)}); return send(res,200,{ok:true,count});
+      const user=requireRole(req,res,['admin','editor']); if(!user)return; const {ids}=await readBody(req),clean=parseBatchIds(ids);
+      const update=db.prepare('UPDATE documents SET deleted_at=?,updated_at=? WHERE id=? AND deleted_at IS NULL'); let count=0; runTransaction(()=>{clean.forEach(id=>{const timestamp=now();count+=Number(update.run(timestamp,timestamp,id).changes)});if(count)audit(user,'批量移入回收站',`${count} 份资料`)}); return send(res,200,{ok:true,count});
     }
     if (req.method === 'POST' && url.pathname === '/api/documents/batch-restore') {
-      const user=requireRole(req,res,['admin','editor']); if(!user)return; const {ids}=await readBody(req); const clean=[...new Set(Array.isArray(ids)?ids.filter(id=>/^[\w-]+$/.test(String(id))).slice(0,100):[])];
-      if(!clean.length)return send(res,400,{error:'请选择要恢复的资料'}); const update=db.prepare('UPDATE documents SET deleted_at=NULL,updated_at=? WHERE id=? AND deleted_at IS NOT NULL'); let count=0; runTransaction(()=>{clean.forEach(id=>{count+=Number(update.run(now(),id).changes)});audit(user,'批量恢复资料',`${count} 份资料`)}); return send(res,200,{ok:true,count});
+      const user=requireRole(req,res,['admin','editor']); if(!user)return; const {ids}=await readBody(req),clean=parseBatchIds(ids);
+      const update=db.prepare('UPDATE documents SET deleted_at=NULL,updated_at=? WHERE id=? AND deleted_at IS NOT NULL'); let count=0; runTransaction(()=>{clean.forEach(id=>{count+=Number(update.run(now(),id).changes)});if(count)audit(user,'批量恢复资料',`${count} 份资料`)}); return send(res,200,{ok:true,count});
+    }
+    if (req.method === 'POST' && url.pathname === '/api/documents/batch-purge') {
+      const user=requireRole(req,res,['admin']); if(!user)return; const {ids}=await readBody(req),clean=parseBatchIds(ids),count=await purgeDocuments(user,clean); return send(res,200,{ok:true,count});
     }
     const docMatch=url.pathname.match(/^\/api\/documents\/([\w-]+)(?:\/(restore))?$/);
     if (docMatch && req.method === 'GET' && !docMatch[2]) { const user=requireRole(req,res,['admin','editor','viewer']); if(!user)return; const document=db.prepare('SELECT d.*, EXISTS(SELECT 1 FROM user_favorites f WHERE f.user_id=? AND f.doc_id=d.id) AS favorite FROM documents d WHERE d.id=?').get(user.id,docMatch[1]); if(!document||(document.deleted_at&&user.role==='viewer'))return send(res,404,{error:'资料不存在'}); return send(res,200,{document}); }
@@ -267,13 +337,13 @@ const requestHandler = async (req, res) => {
       const user=requireRole(req,res,['admin','editor']); if(!user)return; const body=await readBody(req); const existing=db.prepare('SELECT * FROM documents WHERE id=?').get(docMatch[1]); if(!existing)return send(res,404,{error:'资料不存在'}); const clean=validateDocumentInput(body,existing);
       db.prepare('UPDATE documents SET title=?,category=?,type=?,tags_json=?,content=?,metadata_json=?,updated_at=? WHERE id=?').run(clean.title,clean.category,clean.type,JSON.stringify(clean.tags),clean.content,JSON.stringify(clean.metadata),now(),docMatch[1]); audit(user,'编辑资料',existing.title); return send(res,200,{ok:true});
     }
-    if (docMatch && req.method === 'DELETE' && !docMatch[2] && url.searchParams.get('purge') === '1') { const user=requireRole(req,res,['admin']); if(!user)return; const existing=db.prepare('SELECT title FROM documents WHERE id=? AND deleted_at IS NOT NULL').get(docMatch[1]); if(!existing)return send(res,404,{error:'请先将资料移入回收站'}); db.prepare('DELETE FROM documents WHERE id=?').run(docMatch[1]); db.prepare('DELETE FROM attachment_files WHERE id=?').run(docMatch[1]); try{await unlink(join(ATTACHMENT_DIR,docMatch[1]))}catch(error){if(error.code!=='ENOENT')throw error} audit(user,'永久删除资料',existing.title); return send(res,200,{ok:true}); }
+    if (docMatch && req.method === 'DELETE' && !docMatch[2] && url.searchParams.get('purge') === '1') { const user=requireRole(req,res,['admin']); if(!user)return; const count=await purgeDocuments(user,[docMatch[1]]); if(!count)return send(res,404,{error:'请先将资料移入回收站'}); return send(res,200,{ok:true}); }
     if (docMatch && req.method === 'DELETE' && !docMatch[2]) { const user=requireRole(req,res,['admin','editor']); if(!user)return; const existing=db.prepare('SELECT title FROM documents WHERE id=? AND deleted_at IS NULL').get(docMatch[1]); if(!existing)return send(res,404,{error:'资料不存在或已删除'}); db.prepare('UPDATE documents SET deleted_at=?,updated_at=? WHERE id=?').run(now(),now(),docMatch[1]); audit(user,'移入回收站',existing.title); return send(res,200,{ok:true}); }
     if (docMatch && req.method === 'POST' && docMatch[2] === 'restore') { const user=requireRole(req,res,['admin','editor']); if(!user)return; const existing=db.prepare('SELECT title FROM documents WHERE id=? AND deleted_at IS NOT NULL').get(docMatch[1]); if(!existing)return send(res,404,{error:'回收站中未找到资料'}); db.prepare('UPDATE documents SET deleted_at=NULL,updated_at=? WHERE id=?').run(now(),docMatch[1]); audit(user,'恢复资料',existing.title); return send(res,200,{ok:true}); }
     if (req.method === 'GET' && url.pathname === '/api/audit') { const user=requireRole(req,res,['admin']); if(!user)return; return send(res,200,{items:db.prepare('SELECT a.*,u.username FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200').all()}); }
     if (url.pathname.startsWith('/api/')) return send(res,404,{error:'接口不存在'});
     if (!['GET','HEAD'].includes(req.method||'')) return send(res,405,{error:'请求方法不支持'},{Allow:'GET, HEAD'});
-    const requested = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^[/\\]+/,'');
+    const requested = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
     const file=staticFiles.get(requested); if (!file||!existsSync(file)) { res.writeHead(404,{...baseHeaders,'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
     const fileStat=await stat(file),cacheControl=requested.startsWith('vendor/')?'public, max-age=3600':'no-store'; res.writeHead(200,{...baseHeaders,'Content-Type':mime[extname(file).toLowerCase()]||'application/octet-stream','Content-Length':String(fileStat.size),'Cache-Control':cacheControl}); if(req.method==='HEAD')return res.end(); return createReadStream(file).pipe(res);
   } catch (error) { console.error(error); if (!res.headersSent) { const status=Number(error.status)||500; send(res,status,{error:status<500?(error.message||'请求失败'):'服务端内部错误'}); } }
@@ -284,8 +354,9 @@ const PORT = Number(process.env.PORT || 8787); const HOST = process.env.HOST || 
 const tlsCert=process.env.TLS_CERT, tlsKey=process.env.TLS_KEY;
 if(Boolean(tlsCert)!==Boolean(tlsKey))throw new Error('启用 HTTPS 时必须同时设置 TLS_CERT 和 TLS_KEY');
 const server=tlsCert?createHttpsServer({cert:readFileSync(resolve(tlsCert)),key:readFileSync(resolve(tlsKey))},requestHandler):createHttpServer(requestHandler);
-server.listen(PORT,HOST,()=>console.log(`知识库服务已启动：${tlsCert?'https':'http'}://${HOST}:${PORT}`));
+server.listen(PORT,HOST,()=>console.log(`知识库服务已启动：${tlsCert?'https':'http'}://${HOST}:${PORT}；版本：${APP_VERSION}；数据目录：${DATA_DIR}`));
 server.headersTimeout=15_000; server.requestTimeout=10*60_000; server.keepAliveTimeout=5_000; server.maxRequestsPerSocket=1_000;
+server.on('error',error=>{console.error('知识库服务启动失败',error);process.exitCode=1});
 server.on('clientError',(_error,socket)=>{if(socket.writable)socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n')});
 const shutdown = signal => { console.log(`收到 ${signal}，正在安全停止服务…`); server.close(()=>{try{db.exec('PRAGMA wal_checkpoint(TRUNCATE)');db.close()}finally{process.exit(0)}}); setTimeout(()=>process.exit(1),10_000).unref(); };
 process.once('SIGINT',()=>shutdown('SIGINT')); process.once('SIGTERM',()=>shutdown('SIGTERM'));

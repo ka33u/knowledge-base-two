@@ -21,7 +21,7 @@
 
 ```bash
 npm ci
-npm test
+npm run check
 npm run dev
 ```
 
@@ -32,9 +32,12 @@ npm run dev
 - 正式数据：`data/knowledge.db` 与 `data/attachments/`
 - 一致性备份：`npm run backup`
 - 只读巡检：`npm run doctor`
+- 发布补丁完整性检查：`npm run verify:release`
 - 隔离回归：`npm test`（不会接触正式 `data/`）
 - 恢复：先停止服务，再执行 `npm run restore -- "备份目录" --confirm`
 
-局域网模式下，资料列表只同步元数据和摘要，正文按需加载，全文搜索由服务器执行，资料卡片每批显示 100 份。`doctor` 同时检查容量增长、磁盘余量、回收站、日志和最近备份，可用于长期运维预警。
+局域网模式下，资料列表只同步元数据和摘要，正文按需加载，全文搜索由服务器执行，资料卡片默认每页显示 20 份，可切换为 10/20/30/40/50。`doctor` 同时检查容量增长、磁盘余量、回收站、日志和最近备份，可用于长期运维预警。
 
 Windows 11 客户端、HTTPS、开机自启、每日备份、恢复演练和上线核对步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
+
+版本变化见 [CHANGELOG.md](CHANGELOG.md)。

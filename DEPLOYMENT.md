@@ -57,7 +57,7 @@ Get-Volume | Select-Object DriveLetter, FileSystem, SizeRemaining, Size
 
 - 服务器使用固定 IP 或 DHCP 保留地址，建议配置公司内网 DNS，例如 `knowledge.company.local`。
 - 使用千兆有线网络，不建议通过 Wi-Fi 提供正式服务。
-- Windows 网络配置文件必须是“域”或“专用”；防火墙只允许公司内网网段访问知识库端口。
+- Windows 网络配置文件必须是“域”或“专用”；防火墙只允许公司内网网段访问知识库端口。注册脚本检测到活动的 `Public` 网络时会停止，避免静默创建无效或范围过宽的规则。
 - 推荐客户端统一访问标准 HTTPS 端口 `443`；Node 直接提供 HTTPS 时也可使用 `8787`，但地址中需要保留端口号。
 - 严禁把知识库端口映射到互联网，严禁在公网 DNS 中解析该地址。
 - 服务器必须加入公司时间同步体系。系统时间偏差会影响会话有效期、日志审计和证书验证。
@@ -70,6 +70,8 @@ Resolve-DnsName knowledge.company.local
 Test-NetConnection knowledge.company.local -Port 443
 w32tm /query /status
 ```
+
+若首次部署必须用 WinRM，非域电脑通过 IP 连接前需在运维客户端配置目标 `TrustedHosts`，服务端先启用 PowerShell Remoting，并把网络配置改为 `Private`/`Domain`。不要关闭防火墙，也不要默认把 WinRM 或知识库端口开放到所有 `Public` 网络。后续远程传输优先使用 OpenSSH/SCP；管理员组账号的 SSH 公钥应放在 `%ProgramData%\ssh\administrators_authorized_keys`。
 
 ### 2.4 目录和运行账号
 
@@ -90,7 +92,7 @@ C:\HDKnowledgeBase\cert\          证书与私钥（Node 直接 HTTPS 时）
 | --- | --- | --- |
 | `HOST` | 直接提供服务时为 `0.0.0.0`；IIS 反向代理时为 `127.0.0.1` | 是 |
 | `PORT` | 默认 `8787` | 否 |
-| `DATA_DIR` | `D:\HDKnowledgeBaseData` | 正式环境建议设置 |
+| `DATA_DIR` | `D:\HDKnowledgeBaseData` | 正式环境必需 |
 | `BACKUP_DIR` | `E:\HDKnowledgeBaseBackups` | 正式环境建议设置 |
 | `BACKUP_KEEP` | 完整备份保留份数，默认 30；大容量时可设 7–14 | 否 |
 | `TLS_CERT` / `TLS_KEY` | PEM 证书和私钥路径；必须同时设置 | Node 直接 HTTPS 时必需 |
@@ -101,7 +103,7 @@ C:\HDKnowledgeBase\cert\          证书与私钥（Node 直接 HTTPS 时）
 ### 2.6 环境搭建步骤
 
 1. 安装 Node.js 24 LTS x64，重启 PowerShell，确认 `node --version` 为 `v24.x.x`。
-2. 将项目复制到 `C:\HDKnowledgeBase`，将正式数据和备份目录建立在规划好的磁盘。
+2. 使用 Git 或 SCP 将完整项目复制到 `C:\HDKnowledgeBase`，将正式数据和备份目录建立在规划好的磁盘。不要在远程 PowerShell 中粘贴多行源码，也不要用字符串管道传输含中文文件。
 3. 以管理员身份打开 PowerShell，安装锁定版本依赖并运行隔离测试：
 
 ```powershell
@@ -123,12 +125,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-server.ps1 `
 5. 从另一台 Windows 11 电脑完成登录和格式预览验收。关闭前台试运行后，再按第 5 节注册开机启动、每日备份和每日巡检任务。
 6. 首次产生正式数据后执行 `npm run doctor`，要求数据库完整性为 `ok`，且附件 `missing`、`orphaned` 均为空。
 
+仓库内 `.ps1` 文件固定为 UTF-8 BOM + CRLF，以兼容 Windows PowerShell 5.1。不要用会移除 BOM 的编辑器或传输方式改写脚本；部署前运行 `npm run verify:release` 会校验编码、关键接口和前端补丁是否齐全。
+
 ### 2.7 交付给 IT 的验收标准
 
 - Node.js 为 24 LTS x64，`npm ci --omit=dev` 和 `npm run check` 全部通过。
 - 数据目录为服务器本地 NTFS，项目、数据、备份三类目录位置明确且权限正确。
 - 固定 IP、内网 DNS、HTTPS 证书和域/专用防火墙规则均生效。
-- 重启服务器后知识库自动启动，服务、备份、巡检三个计划任务均存在。
+- 重启服务器后知识库自动启动，服务、备份、巡检、自愈四个计划任务均存在。
 - `/api/health` 返回 `status: healthy`，`npm run doctor` 不报告数据完整性或附件缺失问题。
 - Windows 11 Edge/Chrome 均能登录、搜索并打开 DOCX、XLSX、PDF、PPTX 和图片。
 - 完成一次备份，并在非生产目录完成一次校验或恢复演练。
@@ -181,7 +185,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-server.ps1 `
 
 ## 5. 开机自启和每日备份
 
-以管理员身份运行 PowerShell。下面会注册三个 Windows 计划任务：开机启动服务、每天 02:00 备份、每天 06:00 容量与完整性巡检，并仅在“域/专用”网络配置防火墙：
+以管理员身份运行 PowerShell。下面会注册四个 Windows 计划任务：开机后延迟 30 秒启动服务、每天 02:00 备份、每天 06:00 容量与完整性巡检、每 5 分钟检测并自愈服务，并仅在“域/专用”网络配置防火墙：
 
 ```powershell
 cd C:\HDKnowledgeBase
@@ -190,10 +194,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\register-windows-tasks.ps1 `
   -DataDirectory "D:\HDKnowledgeBaseData" `
   -BackupDirectory "E:\HDKnowledgeBaseBackups" `
   -TlsCertificate "C:\HDKnowledgeBase\cert\server.crt" `
-  -TlsKey "C:\HDKnowledgeBase\cert\server.key"
+  -TlsKey "C:\HDKnowledgeBase\cert\server.key" `
+  -ConfigureNoAutoRestart
 ```
 
-脚本要求 Node.js 主版本恰好为 24。服务以 Windows `SYSTEM` 账号运行，日志写入 `logs\server.log`；单个日志超过 10MB 后，会在下次启动时轮换。
+脚本要求 Node.js 主版本恰好为 24。服务以 Windows `SYSTEM` 账号运行，日志写入 `logs\server.log`；单个日志超过 10MB 后，会在下次启动时轮换。`-ConfigureNoAutoRestart` 会写入“有用户登录时不自动重启”的 Windows Update 组策略注册表项，应先获得公司 IT 批准；它不会禁用更新，仍需安排维护窗口主动安装更新并重启。
+
+若隔离测试机只能使用 `Public` 网络，必须先完成网络风险确认，再显式添加 `-AllowPublicNetwork`；脚本才会把知识库端口规则扩展到 `Public`。正式服务器应改为 `Private`/`Domain`，不要把这个开关当作默认方案。自愈任务只检测本机端口并重新启动服务任务，不对外发送账号、数据或报警消息；仍应由公司监控平台采集 `logs\watchdog.log`。
 
 备份流程会短暂创建 `data\.maintenance`，新写入会收到“正在备份”的提示，正在进行的写入结束后再复制。每份备份包含经过 SQLite 完整性检查的数据库、全部原始附件、文件大小和 SHA-256 清单。默认保留最近 30 份，可用系统环境变量 `BACKUP_KEEP` 调整为 1–365。
 
@@ -228,7 +235,7 @@ Start-ScheduledTask -TaskName "HD-KnowledgeBase"
 
 ## 8. 日常巡检与升级
 
-每日确认三个计划任务最后结果为 `0x0`，每周检查磁盘空间、`logs\doctor.log` 和最近备份，每月运行：
+每日确认四个计划任务最后结果；自愈任务只有发现服务中断时才会返回非零并写入 `logs\watchdog.log`。每周检查磁盘空间、`logs\doctor.log`、`logs\watchdog.log` 和最近备份，每月运行：
 
 ```powershell
 npm run doctor
@@ -250,7 +257,7 @@ Invoke-RestMethod https://knowledge.company.local:8787/api/health
 | 回收站 | 超过有效资料 25% 或存在 90 天以上资料 | 管理员确认保留期限后清理 |
 | 最近备份 | 超过 36 小时 | 检查计划任务、权限、目标盘空间和日志 |
 
-升级步骤：先备份，停止任务，替换代码（保留正式 `data`），执行 `npm ci --omit=dev` 和 `npm test`，再启动并做浏览器验收。不要跨 Node 主版本直接升级；本项目当前只支持 Node 24 LTS。
+升级步骤：先备份，停止任务，替换代码（保留正式 `data`），执行 `npm ci --omit=dev`、`npm run verify:release` 和 `npm run check`，确认版本号与发布说明一致，再启动并做浏览器验收。不要只从仓库下载单个 `app.js`/`server.mjs` 覆盖线上文件，也不要保留“线上额外补丁”；仓库、发布提交和线上代码必须一致。不要跨 Node 主版本直接升级；本项目当前只支持 Node 24 LTS。
 
 ## 9. Windows 11 客户端兼容与已知边界
 
@@ -259,7 +266,7 @@ Invoke-RestMethod https://knowledge.company.local:8787/api/health
 - PDF 按可视区域懒渲染，避免长 PDF 一次耗尽内存；高分屏渲染倍率已限制。
 - Excel 只显示单元格结果，不执行公式或宏；超宽表格在文档背景内横向滚动。
 - PPTX 保留原文件并在浏览器解析。复杂动画、宏、SmartArt、特殊字体或部分图表可能与 PowerPoint 不完全一致；这属于预览能力边界，关键演示仍应以原 PowerPoint 为准。
-- 客户端登录只同步标题、分类、标签、摘要和附件元数据；正文在点开资料时按需读取，全文搜索在服务器执行，列表每次最多渲染 100 张卡片。这避免资料增多后每台电脑重复下载全部正文。当前搜索使用 SQLite 条件检索；当转换后 HTML 接近 100MB 或资料接近 1000 份时，应升级为 FTS 全文索引和真正的服务端分页。
+- 客户端登录只同步标题、分类、标签、摘要和附件元数据；正文在点开资料时按需读取，全文搜索在服务器执行，列表默认每页渲染 20 张卡片，可切换 10/20/30/40/50。这避免资料增多后每台电脑重复下载全部正文。当前搜索使用 SQLite 条件检索；当转换后 HTML 接近 100MB 或资料接近 1000 份时，应升级为 FTS 全文索引和真正的服务端分页。
 - 当前是单机 SQLite 架构，不支持两台应用服务器同时连接同一个数据库，也不提供多人同时编辑同一份资料的版本合并。
 
 ## 10. 上线核对表
@@ -267,10 +274,10 @@ Invoke-RestMethod https://knowledge.company.local:8787/api/health
 - [ ] Node.js 24 LTS，`npm ci --omit=dev`、`npm test`、`npm run doctor` 全部通过
 - [ ] 项目、数据、备份目录固定，数据位于本地 NTFS，磁盘空间充足
 - [ ] 公司 DNS 与受信任 HTTPS 证书生效，客户端无证书警告
-- [ ] 防火墙仅开放域/专用网络；不对互联网开放
+- [ ] 网络配置为域/专用，防火墙只允许公司内网；WinRM/SSH 未对互联网开放
 - [ ] 管理员至少两名；默认 `888888` 密码已由每人修改；离职账号已停用
 - [ ] Windows Defender 未排除附件目录
-- [ ] 开机任务、每日备份、30 份保留策略和异盘/异机备份均验证
+- [ ] 开机任务、每日备份、每日巡检、5 分钟自愈、更新维护策略和异盘/异机备份均验证
 - [ ] 在非生产目录完成一次恢复演练
 - [ ] Edge 和 Chrome 各完成登录、搜索、DOCX/XLSX/PDF/PPTX/图片导入与阅读测试
 - [ ] 管理员、编辑者、只读访客三种权限分别验收
