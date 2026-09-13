@@ -14,7 +14,7 @@ import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypt
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolve(process.env.DATA_DIR || join(ROOT, 'data'));
+const DATA_DIR = (()=>{if(process.env.DATA_DIR)return resolve(process.env.DATA_DIR);var d='D:\\HDKnowledgeBaseData';if(existsSync(d))return d;return resolve(join(ROOT,'data'));})();
 await mkdir(DATA_DIR, { recursive: true });
 const ATTACHMENT_DIR = join(DATA_DIR, 'attachments');
 await mkdir(ATTACHMENT_DIR, { recursive: true });
@@ -273,7 +273,7 @@ const requestHandler = async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/audit') { const user=requireRole(req,res,['admin']); if(!user)return; return send(res,200,{items:db.prepare('SELECT a.*,u.username FROM audit_log a LEFT JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 200').all()}); }
     if (url.pathname.startsWith('/api/')) return send(res,404,{error:'接口不存在'});
     if (!['GET','HEAD'].includes(req.method||'')) return send(res,405,{error:'请求方法不支持'},{Allow:'GET, HEAD'});
-    const requested = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^[/\\]+/,'');
+    const requested = url.pathname === '/' ? 'index.html' : normalize(url.pathname).replace(/^[/\\]+/,'').replace(/\\/g,'/');
     const file=staticFiles.get(requested); if (!file||!existsSync(file)) { res.writeHead(404,{...baseHeaders,'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
     const fileStat=await stat(file),cacheControl=requested.startsWith('vendor/')?'public, max-age=3600':'no-store'; res.writeHead(200,{...baseHeaders,'Content-Type':mime[extname(file).toLowerCase()]||'application/octet-stream','Content-Length':String(fileStat.size),'Cache-Control':cacheControl}); if(req.method==='HEAD')return res.end(); return createReadStream(file).pipe(res);
   } catch (error) { console.error(error); if (!res.headersSent) { const status=Number(error.status)||500; send(res,status,{error:status<500?(error.message||'请求失败'):'服务端内部错误'}); } }
