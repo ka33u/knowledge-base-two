@@ -74,7 +74,7 @@
       .category-title:hover .category-delete, .editing-categories .category:hover .category-delete { display:inline-block; }
       .category-delete:hover { background:#ffffff25; color:#fff; }
       .category { cursor:default; touch-action:none; }
-      .editing-categories .category { cursor:grab; }
+      .editing-categories .category { cursor:grab; touch-action:none; user-select:none; }
       .editing-categories .category.dragging { cursor:grabbing; }
       #editCategories { font-size:13px; color:#b7c8bd; padding:0 2px; margin-left:2px; transition:color .15s; }
       #editCategories:hover, #editCategories.active { color:#fff; }
@@ -193,7 +193,7 @@
     <script src="/vendor/d3.js?v=20260719b"></script>
     <script src="/vendor/nvd3.js?v=20260719b"></script>
     <script src="/vendor/pptxjs/pptxjs.js?v=20260719b"></script>
-    <script src="app.js?v=20260829c"></script>
+    <script src="app.js?v=20260913a"></script>
     <script>
       const requestedQuery = new URLSearchParams(window.location.search).get('q');
       if (requestedQuery) {
@@ -249,15 +249,13 @@
         event.preventDefault(); if (!requireEdit() || !activeDoc) return;
         const title = document.querySelector('#editDocTitle').value.trim().replace(/\s+/g, ' ');
         if (!title) return notify('标题不能为空', 'warn');
-        activeDoc.title = title;
-        activeDoc.category = document.querySelector('#editDocCategory').value;
-        activeDoc.tags = parseTags(document.querySelector('#editDocTags').value);
-        activeDoc.updated = Date.now();
+        const updatedDoc = { ...activeDoc, title, category:document.querySelector('#editDocCategory').value, tags:parseTags(document.querySelector('#editDocTags').value), updated:Date.now() };
+        try { await updateRemoteDoc(updatedDoc); } catch (error) { return notify(error.message || '资料同步失败，本地内容未改动', 'warn'); }
+        Object.assign(activeDoc, updatedDoc);
         const collection = trash.some(doc => doc.id === activeDoc.id) ? trash : docs;
         const index = collection.findIndex(doc => doc.id === activeDoc.id);
         if (index >= 0) collection[index] = activeDoc;
         logActivity('编辑资料信息', activeDoc.title);
-        try { await updateRemoteDoc(activeDoc); } catch (error) { return notify(error.message || '资料同步失败', 'warn'); }
         save(); document.querySelector('#editDocDialog').close(); openDoc(activeDoc.id); renderDocs(); notify('资料信息已更新', 'success');
       });
       loadFromDatabase().then(saved => {
@@ -399,29 +397,9 @@
         try { await remoteRequest('/api/users/reset-passwords', { method:'POST' }); localStorage.removeItem(userKey); document.querySelector('#accountsDialog').close(); location.replace('/login.html'); }
         catch (error) { notify(error.message || '全部密码重置失败', 'warn'); }
       };
-      document.addEventListener('submit', async event => {
-        if (!isLanMode || event.target.id !== 'noteForm') return;
-        event.preventDefault(); event.stopImmediatePropagation();
-        if (!requireEdit() || noteSaving) return;
-        const title = document.querySelector('#noteTitle').value.trim().replace(/\s+/g, ' ');
-        const source = document.querySelector('#noteContent').value.trim();
-        if (!title || !source) return notify('请填写笔记标题和内容', 'warn');
-        noteSaving = true;
-        try {
-          const doc = { id:uuidv4(), title, type:'document', category:document.querySelector('#noteCategory').value, tags:[...new Set(['笔记', ...parseTags(document.querySelector('#noteTags').value)])], updated:Date.now(), created:Date.now(), favorite:false, content:sanitizeHtml(needLibrary('marked').parse(source)) };
-          await createRemoteDoc(doc); docs.unshift(doc); save(); document.querySelector('#noteDialog').close(); renderDocs(); notify('笔记已保存到局域网知识库', 'success');
-        } catch (error) { notify(error.message || '笔记保存失败', 'warn'); }
-        finally { noteSaving = false; }
-      }, true);
       document.addEventListener('click', async event => {
         const deleteCategoryButton = event.target.closest('[data-delete-category]');
         if (deleteCategoryButton) { event.preventDefault(); event.stopImmediatePropagation(); await deleteCategory(deleteCategoryButton.dataset.deleteCategory); return; }
-        if (!isLanMode || event.target.id !== 'favoriteButton') return;
-        event.preventDefault(); event.stopImmediatePropagation();
-        if (!activeDoc) return;
-        const previous = activeDoc.favorite; activeDoc.favorite = !previous;
-        try { await updateRemoteFavorite(activeDoc); } catch (error) { activeDoc.favorite = previous; return notify(error.message || '收藏同步失败', 'warn'); }
-        save(); document.querySelector('#favoriteButton').textContent = activeDoc.favorite ? '★ 已收藏' : '☆ 收藏'; renderDocs();
       }, true);
       const categoryDialog = document.querySelector('#categoryDialog');
       document.querySelector('#addCategory').onclick = event => {
@@ -452,8 +430,8 @@
         suppressCategoryClick = true; setTimeout(() => { suppressCategoryClick = false; }, 0);
         const order = [...categoryList.querySelectorAll('[data-category]')].map(element => element.dataset.category);
         categories = order.map(name => categories.find(category => category.name === name)).filter(Boolean); renderDocs();
-        try { if (isLanMode) await remoteRequest('/api/categories/order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({order:categories.map(category=>category.name)})}); save(); notify('分类顺序已保存','success'); }
-        catch (error) { categories = state.previous; renderDocs(); notify(error.message || '分类排序保存失败','warn'); }
+        try { if (isLanMode) await remoteRequest('/api/categories/order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({order:categories.map(category=>category.name),expectedOrder:state.previous.map(category=>category.name)})}); save(); notify('分类顺序已保存','success'); }
+        catch (error) { categories = state.previous; if(isLanMode)await syncRemoteLibrary().catch(()=>renderDocs());else renderDocs(); notify(error.message || '分类排序保存失败','warn'); }
       };
       document.querySelector('#editCategories').onclick = () => { editingCategories = !editingCategories; updateCategoryEditMode(); };
       categoryList.addEventListener('pointerdown', event => {
@@ -471,7 +449,7 @@
       });
       document.addEventListener('pointerup', finishCategoryDrag);
       document.addEventListener('pointercancel', finishCategoryDrag);
-      categoryList.addEventListener('click', event => { if (suppressCategoryClick) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
+      categoryList.addEventListener('click', event => { if (suppressCategoryClick || (editingCategories && event.target.closest('[data-category]') && !event.target.closest('[data-delete-category]'))) { event.preventDefault(); event.stopImmediatePropagation(); } }, true);
       document.addEventListener('submit', event => {
         if ((event.target.id === 'importForm' || event.target.id === 'noteForm' || event.target.id === 'editDocForm') && !canEdit()) {
           event.preventDefault(); event.stopImmediatePropagation(); notify('当前为只读访客，没有编辑权限。', 'warn');
@@ -487,8 +465,11 @@
       const updateBatchUi = () => {
         const bar = document.querySelector('#batchBar'), count = document.querySelector('#batchCount'), toggle = document.querySelector('#batchToggle'), inTrash = view === 'trash', hasSelection = selectedDocIds.size > 0;
         bar.hidden = !batchMode; count.textContent = `已选 ${selectedDocIds.size} 份`; toggle.textContent = batchMode ? '完成' : '编辑'; toggle.classList.toggle('active', batchMode); toggle.disabled = !canEdit();
-        document.querySelector('#batchDelete').hidden = !hasSelection || inTrash; document.querySelector('#batchRestore').hidden = !hasSelection || !inTrash; document.querySelector('#batchPurge').hidden = !hasSelection || !inTrash;
+        document.querySelector('#batchDelete').hidden = !hasSelection || inTrash; document.querySelector('#batchRestore').hidden = !hasSelection || !inTrash; document.querySelector('#batchPurge').hidden = !hasSelection || !inTrash || !canManage();
       };
+      const setViewBase = setView;
+      setView = function (next) { batchMode = false; selectedDocIds.clear(); return setViewBase(next); };
+      const requestRemoteBatch = async (path, ids) => { let count=0; for(let index=0;index<ids.length;index+=100){const result=await remoteRequest(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids.slice(index,index+100)})});count+=Number(result.count)||0} return count; };
       renderDocs = function () {
         renderDocsBase(); const grid = document.querySelector('#documentGrid'), selectable = canEdit();
         grid.classList.toggle('batch-mode', batchMode && selectable);
@@ -508,7 +489,7 @@
       document.querySelector('#batchDelete').onclick = async () => {
         const ids = [...selectedDocIds]; if (!ids.length) return notify('请先选择资料。', 'warn'); if (!confirm(`删除选中的 ${ids.length} 份资料？`)) return;
         try {
-          if (isLanMode) { const result = await remoteRequest('/api/documents/batch-delete', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids}) }); await syncRemoteLibrary(); notify(`已删除 ${result.count} 份资料`, 'success'); }
+          if (isLanMode) { const count = await requestRemoteBatch('/api/documents/batch-delete', ids); await syncRemoteLibrary(); notify(`已删除 ${count} 份资料`, 'success'); }
           else { const picked = docs.filter(doc => selectedDocIds.has(doc.id)); docs = docs.filter(doc => !selectedDocIds.has(doc.id)); trash.unshift(...picked.map(doc => ({...doc,deletedAt:Date.now()}))); save(); notify(`已删除 ${picked.length} 份资料`, 'success'); }
           batchMode = false; selectedDocIds.clear(); renderDocs();
         } catch (error) { notify(error.message || '批量删除失败', 'warn'); }
@@ -516,7 +497,7 @@
       document.querySelector('#batchRestore').onclick = async () => {
         const ids = [...selectedDocIds]; if (!ids.length) return notify('请先选择资料。', 'warn');
         try {
-          if (isLanMode) { const result = await remoteRequest('/api/documents/batch-restore', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids}) }); await syncRemoteLibrary(); notify(`已恢复 ${result.count} 份资料`, 'success'); }
+          if (isLanMode) { const count = await requestRemoteBatch('/api/documents/batch-restore', ids); await syncRemoteLibrary(); notify(`已恢复 ${count} 份资料`, 'success'); }
           else { const picked = trash.filter(doc => selectedDocIds.has(doc.id)); trash = trash.filter(doc => !selectedDocIds.has(doc.id)); docs.unshift(...picked.map(doc => ({...doc,deletedAt:undefined,updated:Date.now()}))); save(); notify(`已恢复 ${picked.length} 份资料`, 'success'); }
           batchMode = false; selectedDocIds.clear(); renderDocs();
         } catch (error) { notify(error.message || '批量恢复失败', 'warn'); }
@@ -524,8 +505,8 @@
       document.querySelector('#batchPurge').onclick = async () => {
         const ids = [...selectedDocIds]; if (!ids.length) return notify('请先选择资料。', 'warn'); if (!confirm(`永久删除选中的 ${ids.length} 份资料？此操作不可恢复。`)) return;
         try {
-          if (isLanMode) { const result = await remoteRequest('/api/documents/batch-purge', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids}) }); await syncRemoteLibrary(); notify(`已永久删除 ${result.count} 份资料`, 'success'); }
-          else { trash = trash.filter(doc => !selectedDocIds.has(doc.id)); save(); notify(`已永久删除 ${ids.length} 份资料`, 'success'); }
+          if (isLanMode) { const count = await requestRemoteBatch('/api/documents/batch-purge', ids); await syncRemoteLibrary(); notify(`已永久删除 ${count} 份资料`, 'success'); }
+          else { const picked=trash.filter(doc=>selectedDocIds.has(doc.id));trash=trash.filter(doc=>!selectedDocIds.has(doc.id));await Promise.all(picked.flatMap(doc=>[doc.pdfId?deletePdfBlob(doc.pdfId):Promise.resolve(),doc.presentationId?deletePresentationBlob(doc.presentationId):Promise.resolve()]));save();notify(`已永久删除 ${picked.length} 份资料`,'success'); }
           batchMode = false; selectedDocIds.clear(); renderDocs();
         } catch (error) { notify(error.message || '批量彻底删除失败', 'warn'); }
       };
