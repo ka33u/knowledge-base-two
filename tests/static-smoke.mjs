@@ -3,7 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root=dirname(fileURLToPath(new URL('../server.mjs',import.meta.url))),index=await readFile(join(root,'index.html'),'utf8'),login=await readFile(join(root,'login.html'),'utf8'),app=await readFile(join(root,'app.js'),'utf8'),server=await readFile(join(root,'server.mjs'),'utf8'),manifest=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
+const root=dirname(fileURLToPath(new URL('../server.mjs',import.meta.url))),index=await readFile(join(root,'index.html'),'utf8'),login=await readFile(join(root,'login.html'),'utf8'),app=await readFile(join(root,'app.js'),'utf8'),server=await readFile(join(root,'server.mjs'),'utf8'),styles=await readFile(join(root,'styles.css'),'utf8'),manifest=JSON.parse(await readFile(join(root,'package.json'),'utf8'));
 for(const [name,source] of [['index.html',index],['login.html',login]]){
   assert.doesNotMatch(source,/<(?:script|link)[^>]+(?:src|href)=["']https?:\/\//i,`${name} 不能依赖公网脚本或样式`);
   assert.match(source,/<meta name="viewport"/i,`${name} 缺少响应式 viewport`);
@@ -19,5 +19,8 @@ assert.doesNotMatch(app,/visibleDocumentLimit=100/,'搜索结果必须遵守每�
 assert.match(server,/\/api\/documents\/batch-purge/,'服务端必须提供批量永久删除接口');
 assert.match(server,/process\.platform!==['"]win32['"]/,'数据目录回退必须区分操作系统');
 assert.match(index,new RegExp(`app\\.js\\?v=[^"']+`),'前端脚本必须带缓存版本');
+assert.match(styles,/\.sidebar>nav\{[^}]*flex:1 1 auto;[^}]*min-height:0;[^}]*overflow-y:auto;/,'侧边栏导航必须可收缩并独立纵向滚动');
+assert.match(styles,/@supports\(height:100dvh\)\{\.sidebar\{height:100dvh\}\}/,'侧边栏必须适配动态视口高度');
+assert.match(styles,/@media\(max-height:560px\)\{\.sidebar\{[^}]*overflow-y:auto;/,'极矮窗口必须允许整栏滚动');
 assert.equal(manifest.version,'1.2.0');
 console.log('Static/offline smoke test passed');
